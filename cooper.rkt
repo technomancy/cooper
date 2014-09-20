@@ -9,7 +9,7 @@
 
 (struct stack (name cards) #:prefab)
 
-(struct state (card stack) #:prefab)
+(struct state (card stack edit?) #:prefab)
 
 
 ;; cards
@@ -20,15 +20,27 @@
      (and (<= left (send event get-x) right)
           (<= top (send event get-y) bottom))]))
 
+(define/match (toggle-edit _state)
+  [((state card stack edit?)) (state card stack (not edit?))])
+
 (define (card-canvas% now)
   (class canvas%
     (define/override (on-event event)
       (when (eq? 'left-down (send event get-event-type))
-        (on-click this now event)))
+        (on-click this now event))
+      (when (eq? 'right-down (send event get-event-type))
+        (set-box! now (toggle-edit (unbox now)))
+        (send this on-paint)))
     (super-new)))
 
 (define (paint now canvas dc)
   (send dc clear)
+  (send dc set-brush "white" 'solid)
+  (when (state-edit? (unbox now))
+    (send dc set-pen "blue" 2 'solid)
+    (let-values ([(width height) (send canvas get-client-size)])
+      (send dc draw-rectangle 0 0 width height)))
+  (send dc set-pen "black" 1 'solid) ;; default
   (for [(step (card-background (state-card (unbox now))))]
     (apply dynamic-send dc step)))
 
@@ -49,7 +61,8 @@
 
 (define (to-card now next-card)
   ;; swap!/update-in would sure be nice here
-  (set-box! now (state next-card (state-stack (unbox now)))))
+  (set-box! now (state next-card (state-stack (unbox now))
+                       (state-edit? (unbox now)))))
 
 
 ;; loading
@@ -68,7 +81,7 @@
 (define (main stack-name . args)
   (let* ([main-stack (load-stack stack-name)]
          [first-card (first (hash-values (stack-cards main-stack)))]
-         [now (box (state first-card main-stack))]
+         [now (box (state first-card main-stack #f))]
          [frame (new frame% [label stack-name])]
          [canvas (new (card-canvas% now) [parent frame]
                       [paint-callback (curry paint now)])])
