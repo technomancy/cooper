@@ -39,7 +39,7 @@
 
 ;;; general
 
-(define debug (box #f))
+(define debug (box #t))
 
 (define (next-mode mode)
   (hash-ref modes (mode-next mode)))
@@ -49,13 +49,14 @@
     (define/override (on-event event)
       (when (unbox debug)
         (printf "state: ~s~n" (unbox now)))
-      ;; TODO: should swap now with onclick instead of passing now in
       (when (eq? 'left-down (send event get-event-type))
         (let ([onclick (mode-onclick (state-mode (unbox now)))])
-          (and onclick (onclick this now event))))
+          (and onclick (swap! now onclick this event))
+          (send this on-paint)))
       (when (eq? 'left-up (send event get-event-type))
         (let ([onrelease (mode-onrelease (state-mode (unbox now)))])
-          (and onrelease (onrelease this now event)))
+          (and onrelease (swap! now onrelease this event))
+          (send this on-paint))
         (swap! now update 'mouse (lambda (_) #f)))
       (when (eq? 'right-down (send event get-event-type))
         (swap! now update 'mode next-mode)
@@ -85,25 +86,25 @@
      (and (<= left (send event get-x) right)
           (<= top (send event get-y) bottom))]))
 
-(define (to-card now next-card)
-  (swap! now update 'card (lambda (_) next-card)))
-
-(define (normal-click canvas now event)
+(define (normal-click st canvas event)
   (when (unbox debug)
     (printf "Click: ~s ~s~n" (send event get-x) (send event get-y)))
-  (for [(button (card-buttons (state-card (unbox now))))]
-    (when (button-hit? button event)
-      (let [(action (button-action button))]
-        (if (string? action)
-            (to-card now (find-card (state-stack (unbox now)) action))
-            (action)))
-      (send canvas on-paint))))
+  (or (for/or [(button (card-buttons (state-card st)))]
+        (if (button-hit? button event)
+            (let [(action (button-action button))]
+              (if (string? action)
+                  (struct-copy state st
+                               [card (hash-ref (stack-cards
+                                                (state-stack st))
+                                               action)])
+                  (action st)))
+            #f)) st))
 
 
 ;;; buttons mode
 
-(define (button-click canvas now event)
-  (swap! now update 'mouse (lambda (_) event)))
+(define (button-click state canvas event)
+  (update state 'mouse (lambda (_) event)))
 
 (define (make-button-corners down-event up-event)
   (list (min (send down-event get-x) (send up-event get-x))
@@ -111,13 +112,13 @@
         (max (send down-event get-x) (send up-event get-x))
         (max (send down-event get-y) (send up-event get-y))))
 
-(define (button-release canvas now event)
-  (let ([corners (make-button-corners (state-mouse (unbox now)) event)]
+(define (button-release state canvas event)
+  (let ([corners (make-button-corners (state-mouse state) event)]
         [target (get-text-from-user "card" "which card?")]
-        [current-card (state-card (unbox now))])
-    (swap! now update 'stack
-           update 'cards hash-update (card-name current-card)
-           update 'buttons (flip cons) (button corners target))))
+        [current-card (state-card state)])
+    (update state 'stack
+            update 'cards hash-update (card-name current-card)
+            update 'buttons (flip cons) (button corners target))))
 
 
 ;;; loading
