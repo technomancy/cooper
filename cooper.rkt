@@ -3,21 +3,15 @@
 
 ;;; types
 
-;; TODO add card events: enter, leave, key, tick
 (struct card (name background buttons) #:prefab)
 
 (struct button (corners action) #:prefab)
 
 (struct stack (name cards) #:prefab)
 
-(struct state (card stack mode) #:prefab)
+(struct state (card stack mode mouse) #:prefab)
 
-(struct mode (name color submodes onclick next) #:prefab)
-
-(define modes `#hash(("normal" . ,(mode "normal" "white" '() #f "buttons"))
-                     ("buttons" . ,(mode "buttons" "blue" '() #f "draw"))
-                     ("draw" . ,(mode "draw" "red" '() #f "cards"))
-                     ("cards" . ,(mode "cards" "green" '() #f "normal"))))
+(struct mode (name color submodes onclick onrelease next) #:prefab)
 
 
 ;;; helpers
@@ -28,15 +22,24 @@
     (let* ([function-name (format "~s-~s" (object-name type) field)]
            [field-function (eval (string->symbol function-name))])
       (eval (list 'struct-copy (object-name type) x
-                  [list field (apply f (field-function x) args)])))))
+                  [list field `(quote ,(apply f (field-function x) args))])))))
 
 ;; from rackjure
 (define (swap! box f . args)
   (let [(old-value (unbox box))]
     (box-cas! box old-value (apply f old-value args))))
 
+(define (hash-update h k f . args)
+  (let ([old-value (hash-ref h k #f)])
+    (hash-set h k (apply f old-value args))))
+
+(define (flip f)
+  (lambda args (apply f (reverse args))))
+
 
-;;; rendering
+;;; general
+
+(define debug (box #f))
 
 (define (next-mode mode)
   (hash-ref modes (mode-next mode)))
@@ -44,8 +47,16 @@
 (define (card-canvas% now)
   (class canvas%
     (define/override (on-event event)
+      (when (unbox debug)
+        (printf "state: ~s~n" (unbox now)))
+      ;; TODO: should swap now with onclick instead of passing now in
       (when (eq? 'left-down (send event get-event-type))
-        (onclick this now event))
+        (let ([onclick (mode-onclick (state-mode (unbox now)))])
+          (and onclick (onclick this now event))))
+      (when (eq? 'left-up (send event get-event-type))
+        (let ([onrelease (mode-onrelease (state-mode (unbox now)))])
+          (and onrelease (onrelease this now event)))
+        (swap! now update 'mouse (lambda (_) #f)))
       (when (eq? 'right-down (send event get-event-type))
         (swap! now update 'mode next-mode)
         (send this on-paint)))
@@ -66,7 +77,7 @@
   (hash-ref (stack-cards stack) card-name))
 
 
-;;; actions
+;;; normal mode
 
 (define (button-hit? button event)
   (match (button-corners button)
@@ -74,8 +85,12 @@
      (and (<= left (send event get-x) right)
           (<= top (send event get-y) bottom))]))
 
-(define (onclick canvas now event)
-  (printf "state: ~s~n" (unbox now))
+(define (to-card now next-card)
+  (swap! now update 'card (lambda (_) next-card)))
+
+(define (normal-click canvas now event)
+  (when (unbox debug)
+    (printf "Click: ~s ~s~n" (send event get-x) (send event get-y)))
   (for [(button (card-buttons (state-card (unbox now))))]
     (when (button-hit? button event)
       (let [(action (button-action button))]
@@ -84,8 +99,25 @@
             (action)))
       (send canvas on-paint))))
 
-(define (to-card now next-card)
-  (swap! now update 'card (lambda (_) next-card)))
+
+;;; buttons mode
+
+(define (button-click canvas now event)
+  (swap! now update 'mouse (lambda (_) event)))
+
+(define (make-button-corners down-event up-event)
+  (list (min (send down-event get-x) (send up-event get-x))
+        (min (send down-event get-y) (send up-event get-y))
+        (max (send down-event get-x) (send up-event get-x))
+        (max (send down-event get-y) (send up-event get-y))))
+
+(define (button-release canvas now event)
+  (let ([corners (make-button-corners (state-mouse (unbox now)) event)]
+        [target (get-text-from-user "card" "which card?")]
+        [current-card (state-card (unbox now))])
+    (swap! now update 'stack
+           update 'cards hash-update (card-name current-card)
+           update 'buttons (flip cons) (button corners target))))
 
 
 ;;; loading
@@ -104,11 +136,19 @@
 (define (main stack-name . args)
   (let* ([main-stack (load-stack stack-name)]
          [first-card (first (hash-values (stack-cards main-stack)))]
-         [now (box (state first-card main-stack (hash-ref modes "normal")))]
+         [now (box (state first-card main-stack (hash-ref modes "normal") #f))]
          [frame (new frame% [label stack-name])]
          [canvas (new (card-canvas% now) [parent frame]
                       [paint-callback (curry paint now)])])
-    (send frame show #t)))
+    (send frame show #t)
+    now))
+
+(define modes `#hash(("normal" . ,(mode "normal" "white" '()
+                                        normal-click #f "buttons"))
+                     ("buttons" . ,(mode "buttons" "blue" '()
+                                         button-click button-release "draw"))
+                     ("draw" . ,(mode "draw" "red" '() #f #f "cards"))
+                     ("cards" . ,(mode "cards" "green" '() #f #f "normal"))))
 
 ;; for quick testing
 ;; (main "mystack.rkt")
