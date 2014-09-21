@@ -2,25 +2,22 @@
 
 <img src="http://p.hagelb.org/cooper.jpg" />
 
-## TODO
+## Modes
 
-### Edit mode
-
-* drawing
+* normal/explore
 * buttons
+* drawing
+ * brush
+ * line
+ * rectangle
+ * ellipse
+ * text
 * cards
-** list
-** create
-** visit
-** delete
-** rename
-
-### Card events?
-
-* enter
-* leave
-* key
-* tick
+ * list
+ * edit
+ * new
+ * delete
+ * copy
 
 ## License
 
@@ -28,4 +25,4 @@ Copyright © 2014 Phil Hagelberg and contributors
 
 Image above © 2014 Boom Entertainment, Inc.
 
-Distributed under the GNU General Public License; see file LICENSE.
+Distributed under the GNU General Public License version 3; see file LICENSE.

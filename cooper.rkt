@@ -1,43 +1,61 @@
 #lang racket/gui
 
 
-;; types
+;;; types
 
+;; TODO add card events: enter, leave, key, tick
 (struct card (name background buttons) #:prefab)
 
 (struct button (corners action) #:prefab)
 
 (struct stack (name cards) #:prefab)
 
-(struct state (card stack edit?) #:prefab)
+(struct state (card stack mode) #:prefab)
+
+(struct mode (name color submodes onclick next) #:prefab)
+
+(define modes `#hash(("normal" . ,(mode "normal" "white" '() #f "buttons"))
+                     ("buttons" . ,(mode "buttons" "blue" '() #f "draw"))
+                     ("draw" . ,(mode "draw" "red" '() #f "cards"))
+                     ("cards" . ,(mode "cards" "green" '() #f "normal"))))
 
 
-;; cards
+;;; helpers
 
-(define (button-hit? button event)
-  (match (button-corners button)
-    [(list left top right bottom)
-     (and (<= left (send event get-x) right)
-          (<= top (send event get-y) bottom))]))
+;; TODO: figure out how to do this without eval
+(define (update x field f . args)
+  (let-values ([(type _) (struct-info x)])
+    (let* ([function-name (format "~s-~s" (object-name type) field)]
+           [field-function (eval (string->symbol function-name))])
+      (eval (list 'struct-copy (object-name type) x
+                  [list field (apply f (field-function x) args)])))))
 
-(define/match (toggle-edit _state)
-  [((state card stack edit?)) (state card stack (not edit?))])
+;; from rackjure
+(define (swap! box f . args)
+  (let [(old-value (unbox box))]
+    (box-cas! box old-value (apply f old-value args))))
+
+
+;;; rendering
+
+(define (next-mode mode)
+  (hash-ref modes (mode-next mode)))
 
 (define (card-canvas% now)
   (class canvas%
     (define/override (on-event event)
       (when (eq? 'left-down (send event get-event-type))
-        (on-click this now event))
+        (onclick this now event))
       (when (eq? 'right-down (send event get-event-type))
-        (set-box! now (toggle-edit (unbox now)))
+        (swap! now update 'mode next-mode)
         (send this on-paint)))
     (super-new)))
 
 (define (paint now canvas dc)
   (send dc clear)
   (send dc set-brush "white" 'solid)
-  (when (state-edit? (unbox now))
-    (send dc set-pen "blue" 2 'solid)
+  (let ([mode (state-mode (unbox now))])
+    (send dc set-pen (mode-color mode) 2 'solid)
     (let-values ([(width height) (send canvas get-client-size)])
       (send dc draw-rectangle 0 0 width height)))
   (send dc set-pen "black" 1 'solid) ;; default
@@ -48,9 +66,16 @@
   (hash-ref (stack-cards stack) card-name))
 
 
-;; actions
+;;; actions
 
-(define (on-click canvas now event)
+(define (button-hit? button event)
+  (match (button-corners button)
+    [(list left top right bottom)
+     (and (<= left (send event get-x) right)
+          (<= top (send event get-y) bottom))]))
+
+(define (onclick canvas now event)
+  (printf "state: ~s~n" (unbox now))
   (for [(button (card-buttons (state-card (unbox now))))]
     (when (button-hit? button event)
       (let [(action (button-action button))]
@@ -60,12 +85,10 @@
       (send canvas on-paint))))
 
 (define (to-card now next-card)
-  ;; swap!/update-in would sure be nice here
-  (set-box! now (state next-card (state-stack (unbox now))
-                       (state-edit? (unbox now)))))
+  (swap! now update 'card (lambda (_) next-card)))
 
 
-;; loading
+;;; loading
 
 (define (stack-filename->name filename)
   (first (string-split (path->string (file-name-from-path filename)) ".")))
@@ -81,7 +104,7 @@
 (define (main stack-name . args)
   (let* ([main-stack (load-stack stack-name)]
          [first-card (first (hash-values (stack-cards main-stack)))]
-         [now (box (state first-card main-stack #f))]
+         [now (box (state first-card main-stack (hash-ref modes "normal")))]
          [frame (new frame% [label stack-name])]
          [canvas (new (card-canvas% now) [parent frame]
                       [paint-callback (curry paint now)])])
@@ -89,4 +112,3 @@
 
 ;; for quick testing
 ;; (main "mystack.rkt")
-
