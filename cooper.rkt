@@ -90,7 +90,7 @@
   (hash-ref (stack-cards (state-stack state)) (state-card state)))
 
 
-;;; normal mode
+;;; explore mode
 
 (define (button-hit? button event)
   (match (button-corners button)
@@ -98,7 +98,7 @@
      (and (<= left (send event get-x) right)
           (<= top (send event get-y) bottom))]))
 
-(define (normal-click st canvas event)
+(define (explore-click st canvas event)
   (when (unbox debug)
     (printf "Click: ~s ~s~n" (send event get-x) (send event get-y)))
   (or (for/or [(button (card-buttons (current-card st)))]
@@ -217,15 +217,15 @@
   (let* ([main-stack (load-stack stack-name)]
          [first-card (first (hash-keys (stack-cards main-stack)))]
          [now (box (state first-card main-stack
-                          (hash-ref modes "normal") #f #f))]
+                          (hash-ref modes "explore") #f #f))]
          [frame (new frame% [label stack-name])]
          [canvas (new (card-canvas% now) [parent frame]
                       [paint-callback (curry paint now)])])
     (send frame show #t)
     now))
 
-(define modes `#hash(("normal" . ,(mode "normal" "white" '()
-                                        normal-click #f #f #f "buttons"))
+(define modes `#hash(("explore" . ,(mode "explore" "white" '()
+                                        explore-click #f #f #f "buttons"))
                      ("buttons" . ,(mode "buttons" "blue" '()
                                          button-click button-release
                                          button-move button-paint "draw"))
@@ -234,7 +234,7 @@
                                       draw-move draw-paint
                                       "cards"))
                      ("cards" . ,(mode "cards" "green" '()
-                                       cards-click #f #f #f "normal"))))
+                                       cards-click #f #f #f "explore"))))
 
 ;; for quick testing
 ;; (main "mystack.rkt")

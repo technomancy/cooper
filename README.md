@@ -4,7 +4,7 @@
 
 ## Modes
 
-* normal/explore (white border)
+* explore (white border)
 * buttons (blue border)
 * drawing (red border)
 * cards (green border)
