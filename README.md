@@ -4,20 +4,10 @@
 
 ## Modes
 
-* normal/explore
-* buttons
-* drawing
- * brush
- * line
- * rectangle
- * ellipse
- * text
-* cards
- * list
- * edit
- * new
- * delete
- * copy
+* normal/explore (white border)
+* buttons (blue border)
+* drawing (red border)
+* cards (green border)
 
 ## License
 

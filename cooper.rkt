@@ -119,11 +119,10 @@
 
 (define (button-release state canvas event)
   (let ([corners (make-button-corners (state-mouse state) event)]
-        [target (get-text-from-user "card" "which card?")]
-        [current-card (current-card state)])
+        [target (get-text-from-user "card" "which card?")])
     (if target
         (update state 'stack
-                update 'cards hash-update (card-name current-card)
+                update 'cards hash-update (state-card state)
                 update 'buttons (flip cons) (button corners target))
         state)))
 
@@ -142,10 +141,27 @@
   (update state 'mouse (lambda (_) event)))
 
 (define (draw-release state canvas event)
-  state)
+  (let ([old-event (state-mouse state)])
+    (update state 'stack
+            update 'cards hash-update (state-card state)
+            update 'background (flip cons) (list 'draw-line
+                                                 (send old-event get-x)
+                                                 (send old-event get-y)
+                                                 (send event get-x)
+                                                 (send event get-y)))))
 
 (define (draw-paint state dc canvas)
   #f)
+
+
+;;; cards mode
+
+(define (cards-click state canvas event)
+  (let ([card-name (get-text-from-user "card" "New card name:")])
+    (if card-name
+        (update state 'stack
+                update 'cards hash-set card-name (card card-name '() '()))
+        state)))
 
 
 ;;; loading
@@ -180,7 +196,7 @@
                                       draw-click draw-release draw-paint
                                       "cards"))
                      ("cards" . ,(mode "cards" "green" '()
-                                       #f #f #f "normal"))))
+                                       cards-click #f #f "normal"))))
 
 ;; for quick testing
 ;; (main "mystack.rkt")
