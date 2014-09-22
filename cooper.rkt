@@ -9,12 +9,10 @@
 
 (struct stack (name cards) #:prefab)
 
-(struct state (card stack mode mouse) #:prefab)
+(struct state (card stack mode mouse-down mouse-last) #:prefab)
 
-(struct mode (name color submodes onclick onrelease paint next) #:prefab)
-
-(define (current-card state)
-  (hash-ref (stack-cards (state-stack state)) (state-card state)))
+(struct mode (name color submodes onclick onrelease onmove paint next)
+        #:prefab)
 
 
 ;;; helpers
@@ -52,6 +50,7 @@
     (define/override (on-event event)
       (when (unbox debug)
         (printf "state: ~s~n" (unbox now)))
+      ;; TODO: clean this up
       (when (eq? 'left-down (send event get-event-type))
         (let ([onclick (mode-onclick (state-mode (unbox now)))])
           (and onclick (swap! now onclick this event))
@@ -60,7 +59,12 @@
         (let ([onrelease (mode-onrelease (state-mode (unbox now)))])
           (and onrelease (swap! now onrelease this event))
           (send this on-paint))
-        (swap! now update 'mouse (lambda (_) #f)))
+        (swap! now update 'mouse-down (lambda (_) #f))
+        (swap! now update 'mouse-last (lambda (_) #f)))
+      (when (eq? 'motion (send event get-event-type))
+        (let ([onmove (mode-onmove (state-mode (unbox now)))])
+          (and onmove (swap! now onmove this event))
+          (send this on-paint)))
       (when (eq? 'right-down (send event get-event-type))
         (swap! now update 'mode next-mode)
         (send this on-paint)))
@@ -82,8 +86,8 @@
     (when painter
       (painter (unbox now) dc canvas))))
 
-(define (find-card stack card-name)
-  (hash-ref (stack-cards stack) card-name))
+(define (current-card state)
+  (hash-ref (stack-cards (state-stack state)) (state-card state)))
 
 
 ;;; normal mode
@@ -109,7 +113,7 @@
 ;;; buttons mode
 
 (define (button-click state canvas event)
-  (update state 'mouse (lambda (_) event)))
+  (update state 'mouse-down (lambda (_) event)))
 
 (define (make-button-corners down-event up-event)
   (list (min (send down-event get-x) (send up-event get-x))
@@ -118,7 +122,7 @@
         (max (send down-event get-y) (send up-event get-y))))
 
 (define (button-release state canvas event)
-  (let ([corners (make-button-corners (state-mouse state) event)]
+  (let ([corners (make-button-corners (state-mouse-down state) event)]
         [target (get-text-from-user "card" "which card?")])
     (if target
         (update state 'stack
@@ -138,20 +142,30 @@
 ;;; draw mode
 
 (define (draw-click state canvas event)
-  (update state 'mouse (lambda (_) event)))
+  (update state 'mouse-down (lambda (_) event)))
 
 (define (draw-release state canvas event)
-  (let ([old-event (state-mouse state)])
+  (let* ([down-event (state-mouse-down state)]
+         [state (update state 'mouse-last (lambda (_) event))])
     (update state 'stack
             update 'cards hash-update (state-card state)
             update 'background (flip cons) (list 'draw-line
-                                                 (send old-event get-x)
-                                                 (send old-event get-y)
+                                                 (send down-event get-x)
+                                                 (send down-event get-y)
                                                  (send event get-x)
                                                  (send event get-y)))))
 
 (define (draw-paint state dc canvas)
-  #f)
+  (send dc set-pen "black" 1 'solid)
+  (let ([down (state-mouse-down state)]
+        [last (state-mouse-last state)])
+    (when (and down last)
+      (send dc draw-line
+            (send down get-x) (send down get-y)
+            (send last get-x) (send last get-y)))))
+
+(define (draw-move state canvas event)
+  (update state 'mouse-last (lambda (_) event)))
 
 
 ;;; cards mode
@@ -180,7 +194,8 @@
 (define (main stack-name . args)
   (let* ([main-stack (load-stack stack-name)]
          [first-card (first (hash-keys (stack-cards main-stack)))]
-         [now (box (state first-card main-stack (hash-ref modes "normal") #f))]
+         [now (box (state first-card main-stack
+                          (hash-ref modes "normal") #f #f))]
          [frame (new frame% [label stack-name])]
          [canvas (new (card-canvas% now) [parent frame]
                       [paint-callback (curry paint now)])])
@@ -188,15 +203,16 @@
     now))
 
 (define modes `#hash(("normal" . ,(mode "normal" "white" '()
-                                        normal-click #f #f "buttons"))
+                                        normal-click #f #f #f "buttons"))
                      ("buttons" . ,(mode "buttons" "blue" '()
                                          button-click button-release
-                                         button-paint "draw"))
+                                         #f button-paint "draw"))
                      ("draw" . ,(mode "draw" "red" '()
-                                      draw-click draw-release draw-paint
+                                      draw-click draw-release
+                                      draw-move draw-paint
                                       "cards"))
                      ("cards" . ,(mode "cards" "green" '()
-                                       cards-click #f #f "normal"))))
+                                       cards-click #f #f #f "normal"))))
 
 ;; for quick testing
 ;; (main "mystack.rkt")
