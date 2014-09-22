@@ -121,9 +121,13 @@
         (max (send down-event get-x) (send up-event get-x))
         (max (send down-event get-y) (send up-event get-y))))
 
+(define (existing-card? state card-name)
+  (member card-name (hash-keys (stack-cards (state-stack state)))))
+
 (define (button-release state canvas event)
   (let ([corners (make-button-corners (state-mouse-down state) event)]
-        [target (get-text-from-user "card" "which card?")])
+        [target (get-text-from-user "card" "which card?"
+                                    #:validate (curry existing-card? state))])
     (if target
         (update state 'stack
                 update 'cards hash-update (state-card state)
