@@ -125,6 +125,7 @@
   (member card-name (hash-keys (stack-cards (state-stack state)))))
 
 (define (button-release state canvas event)
+  (update state 'mouse-down (lambda (_) #f))
   (let ([corners (make-button-corners (state-mouse-down state) event)]
         [target (get-text-from-user "card" "which card?"
                                     #:validate (curry existing-card? state))])
@@ -155,7 +156,9 @@
                              "dummy") dc))))
 
 (define (button-move state canvas event)
-  (update state 'mouse-last (lambda (_) event)))
+  (if (state-mouse-down state)
+      (update state 'mouse-last (lambda (_) event))
+      state))
 
 
 ;;; draw mode
