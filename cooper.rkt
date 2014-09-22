@@ -133,7 +133,10 @@
 (define (render-button button dc)
   (match (button-corners button)
     [(list left top right bottom)
-     (send dc draw-rectangle left top (- right left) (- bottom top))]))
+     (send dc draw-rectangle
+           (min left right) (min top bottom)
+           (- (max left right) (min left right))
+           (- (max top bottom) (min top bottom)))]))
 
 (define (button-paint state dc canvas)
   (send dc set-brush "white" 'transparent)
