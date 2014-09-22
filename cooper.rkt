@@ -130,13 +130,25 @@
                 update 'buttons (flip cons) (button corners target))
         state)))
 
+(define (render-button button dc)
+  (match (button-corners button)
+    [(list left top right bottom)
+     (send dc draw-rectangle left top (- right left) (- bottom top))]))
+
 (define (button-paint state dc canvas)
   (send dc set-brush "white" 'transparent)
   (send dc set-pen "black" 1 'long-dash)
   (for ([button (card-buttons (current-card state))])
-    (match (button-corners button)
-      [(list left top right bottom)
-       (send dc draw-rectangle left top (- right left) (- bottom top))])))
+    (render-button button dc))
+  (let ([down (state-mouse-down state)]
+        [last (state-mouse-last state)])
+    (when (and down last)
+      (render-button (button (list (send down get-x) (send down get-y)
+                                   (send last get-x) (send last get-y))
+                             "dummy") dc))))
+
+(define (button-move state canvas event)
+  (update state 'mouse-last (lambda (_) event)))
 
 
 ;;; draw mode
@@ -206,7 +218,7 @@
                                         normal-click #f #f #f "buttons"))
                      ("buttons" . ,(mode "buttons" "blue" '()
                                          button-click button-release
-                                         #f button-paint "draw"))
+                                         button-move button-paint "draw"))
                      ("draw" . ,(mode "draw" "red" '()
                                       draw-click draw-release
                                       draw-move draw-paint
