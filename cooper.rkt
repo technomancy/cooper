@@ -11,7 +11,10 @@
 
 (struct state (card stack mode mouse) #:prefab)
 
-(struct mode (name color submodes onclick onrelease next) #:prefab)
+(struct mode (name color submodes onclick onrelease paint next) #:prefab)
+
+(define (current-card state)
+  (hash-ref (stack-cards (state-stack state)) (state-card state)))
 
 
 ;;; helpers
@@ -39,7 +42,7 @@
 
 ;;; general
 
-(define debug (box #t))
+(define debug (box #f))
 
 (define (next-mode mode)
   (hash-ref modes (mode-next mode)))
@@ -63,16 +66,21 @@
         (send this on-paint)))
     (super-new)))
 
+(define (mode-border mode dc canvas)
+  (send dc set-pen (mode-color mode) 2 'solid)
+  (let-values ([(width height) (send canvas get-client-size)])
+    (send dc draw-rectangle 0 0 width height)))
+
 (define (paint now canvas dc)
   (send dc clear)
   (send dc set-brush "white" 'solid)
-  (let ([mode (state-mode (unbox now))])
-    (send dc set-pen (mode-color mode) 2 'solid)
-    (let-values ([(width height) (send canvas get-client-size)])
-      (send dc draw-rectangle 0 0 width height)))
+  (mode-border (state-mode (unbox now)) dc canvas)
   (send dc set-pen "black" 1 'solid) ;; default
-  (for [(step (card-background (state-card (unbox now))))]
-    (apply dynamic-send dc step)))
+  (for [(step (card-background (current-card (unbox now))))]
+    (apply dynamic-send dc step))
+  (let ([painter (mode-paint (state-mode (unbox now)))])
+    (when painter
+      (painter (unbox now) dc canvas))))
 
 (define (find-card stack card-name)
   (hash-ref (stack-cards stack) card-name))
@@ -89,14 +97,11 @@
 (define (normal-click st canvas event)
   (when (unbox debug)
     (printf "Click: ~s ~s~n" (send event get-x) (send event get-y)))
-  (or (for/or [(button (card-buttons (state-card st)))]
+  (or (for/or [(button (card-buttons (current-card st)))]
         (if (button-hit? button event)
             (let [(action (button-action button))]
               (if (string? action)
-                  (struct-copy state st
-                               [card (hash-ref (stack-cards
-                                                (state-stack st))
-                                               action)])
+                  (struct-copy state st [card action])
                   (action st)))
             #f)) st))
 
@@ -115,10 +120,32 @@
 (define (button-release state canvas event)
   (let ([corners (make-button-corners (state-mouse state) event)]
         [target (get-text-from-user "card" "which card?")]
-        [current-card (state-card state)])
-    (update state 'stack
-            update 'cards hash-update (card-name current-card)
-            update 'buttons (flip cons) (button corners target))))
+        [current-card (current-card state)])
+    (if target
+        (update state 'stack
+                update 'cards hash-update (card-name current-card)
+                update 'buttons (flip cons) (button corners target))
+        state)))
+
+(define (button-paint state dc canvas)
+  (send dc set-brush "white" 'transparent)
+  (send dc set-pen "black" 1 'long-dash)
+  (for ([button (card-buttons (current-card state))])
+    (match (button-corners button)
+      [(list left top right bottom)
+       (send dc draw-rectangle left top (- right left) (- bottom top))])))
+
+
+;;; draw mode
+
+(define (draw-click state canvas event)
+  (update state 'mouse (lambda (_) event)))
+
+(define (draw-release state canvas event)
+  state)
+
+(define (draw-paint state dc canvas)
+  #f)
 
 
 ;;; loading
@@ -136,7 +163,7 @@
 
 (define (main stack-name . args)
   (let* ([main-stack (load-stack stack-name)]
-         [first-card (first (hash-values (stack-cards main-stack)))]
+         [first-card (first (hash-keys (stack-cards main-stack)))]
          [now (box (state first-card main-stack (hash-ref modes "normal") #f))]
          [frame (new frame% [label stack-name])]
          [canvas (new (card-canvas% now) [parent frame]
@@ -145,11 +172,15 @@
     now))
 
 (define modes `#hash(("normal" . ,(mode "normal" "white" '()
-                                        normal-click #f "buttons"))
+                                        normal-click #f #f "buttons"))
                      ("buttons" . ,(mode "buttons" "blue" '()
-                                         button-click button-release "draw"))
-                     ("draw" . ,(mode "draw" "red" '() #f #f "cards"))
-                     ("cards" . ,(mode "cards" "green" '() #f #f "normal"))))
+                                         button-click button-release
+                                         button-paint "draw"))
+                     ("draw" . ,(mode "draw" "red" '()
+                                      draw-click draw-release draw-paint
+                                      "cards"))
+                     ("cards" . ,(mode "cards" "green" '()
+                                       #f #f #f "normal"))))
 
 ;; for quick testing
 ;; (main "mystack.rkt")
