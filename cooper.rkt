@@ -123,14 +123,16 @@
   (member card-name (hash-keys (stack-cards (state-stack state)))))
 
 (define (button-release state canvas event down last)
-  (let ([corners (make-button-corners down last)]
-        [target (get-text-from-user "card" "which card?"
-                                    #:validate (curry existing-card? state))])
-    (if target
-        (update state 'stack
-                update 'cards hash-update (state-card state)
-                update 'buttons (flip cons) (button corners target))
-        state)))
+  (if (and down last)
+      (let ([corners (make-button-corners down last)]
+            [target (get-text-from-user "card" "which card?"
+                                        #:validate (curry existing-card? state))])
+        (if target
+            (update state 'stack
+                    update 'cards hash-update (state-card state)
+                    update 'buttons (flip cons) (button corners target))
+            state))
+      state))
 
 (define (render-button button dc)
   (match (button-corners button)
