@@ -46,11 +46,16 @@
   (hash-ref modes (mode-next mode)))
 
 (define (handle-key now event)
-  (when (and (send event get-control-down)
-             (equal? (send event get-key-code) #\s))
-    (let ([filename (put-file "Save to:")])
-      (when filename
-        (call-with-output-file filename (curry write (state-stack (unbox now))))))))
+  (when (send event get-control-down)
+    (case (send event get-key-code)
+      [(#\s) (let ([filename (put-file "Save to:")])
+               (when filename
+                 (call-with-output-file filename
+                   (curry write (state-stack (unbox now))))))]
+      [(#\l) (let ([filename (get-file "Load:")])
+               (when filename
+                 (swap! now update 'stack
+                        (lambda (_) (call-with-input-file filename read)))))])))
 
 (define (handle-mouse now canvas event)
   (case (send event get-event-type)
