@@ -45,30 +45,39 @@
 (define (next-mode mode)
   (hash-ref modes (mode-next mode)))
 
+(define (handle-key now event)
+  (when (and (send event get-control-down)
+             (equal? (send event get-key-code) #\s))
+    (let ([filename (put-file "Save to:")])
+      (when filename
+        (call-with-output-file filename (curry write (unbox now)))))))
+
 (define (card-canvas% now)
   (class canvas%
+    (define/override (on-char event)
+      (handle-key now event))
     (define/override (on-event event)
       (when (unbox debug)
         (printf "state: ~s~n" (unbox now)))
-      (when (eq? 'left-down (send event get-event-type))
-        (swap! now update 'mouse-down (lambda (_) event))
-        (let ([onclick (mode-onclick (state-mode (unbox now)))])
-          (and onclick (swap! now onclick this event))
-          (send this on-paint)))
-      (when (eq? 'left-up (send event get-event-type))
-        (let ([down (state-mouse-down (unbox now))]
-              [last (state-mouse-last (unbox now))]
-              [onrelease (mode-onrelease (state-mode (unbox now)))])
-          (swap! now update 'mouse-down (lambda (_) #f))
-          (swap! now update 'mouse-last (lambda (_) #f))
-          (and onrelease (swap! now onrelease this event down last))
-          (send this on-paint)))
-      (when (eq? 'motion (send event get-event-type))
-        (let ([onmove (mode-onmove (state-mode (unbox now)))])
-          (and onmove (swap! now onmove this event))))
-      (when (eq? 'right-down (send event get-event-type))
-        (swap! now update 'mode next-mode)
-        (send this on-paint)))
+      (case (send event get-event-type)
+        ['left-down
+         (swap! now update 'mouse-down (lambda (_) event))
+         (let ([onclick (mode-onclick (state-mode (unbox now)))])
+           (and onclick (swap! now onclick this event))
+           (send this on-paint))]
+        ['left-up
+         (let ([down (state-mouse-down (unbox now))]
+               [last (state-mouse-last (unbox now))]
+               [onrelease (mode-onrelease (state-mode (unbox now)))])
+           (swap! now update 'mouse-down (lambda (_) #f))
+           (swap! now update 'mouse-last (lambda (_) #f))
+           (and onrelease (swap! now onrelease this event down last))
+           (send this on-paint))]
+        ['motion
+         (let ([onmove (mode-onmove (state-mode (unbox now)))])
+           (and onmove (swap! now onmove this event)))]
+        ['right-down (swap! now update 'mode next-mode)
+                     (send this on-paint)]))
     (super-new)))
 
 (define (mode-border mode dc canvas)
