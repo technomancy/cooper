@@ -217,11 +217,14 @@
 (define (stack-filename->name filename)
   (first (string-split (path->string (file-name-from-path filename)) ".")))
 
-(define (main filename . args)
-  (let* ([stack (call-with-input-file filename read)]
-         [first-card (first (hash-keys (stack-cards stack)))]
-         [now (box (state first-card stack (hash-ref modes "explore") #f #f))]
-         [frame (new frame% [label filename]
+(define (main [filename #f] . args)
+  (let* ([stack (if (and filename (file-exists? filename))
+                    (call-with-input-file filename read)
+                    (stack (or filename "new")
+                           (hash "first" (card "first" '() '())) 600 800))]
+         [now (box (state (first (hash-keys (stack-cards stack)))
+                          stack (hash-ref modes "explore") #f #f))]
+         [frame (new frame% [label (stack-name stack)]
                      [width (stack-width stack)] [height (stack-height stack)])]
          [canvas (new (card-canvas% now) [parent frame]
                       [paint-callback (curry paint now)])])
