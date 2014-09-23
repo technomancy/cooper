@@ -52,6 +52,27 @@
       (when filename
         (call-with-output-file filename (curry write (unbox now)))))))
 
+(define (handle-mouse now canvas event)
+  (case (send event get-event-type)
+    ['left-down
+     (swap! now update 'mouse-down (lambda (_) event))
+     (let ([onclick (mode-onclick (state-mode (unbox now)))])
+       (and onclick (swap! now onclick canvas event))
+       (send canvas on-paint))]
+    ['left-up
+     (let ([down (state-mouse-down (unbox now))]
+           [last (state-mouse-last (unbox now))]
+           [onrelease (mode-onrelease (state-mode (unbox now)))])
+       (swap! now update 'mouse-down (lambda (_) #f))
+       (swap! now update 'mouse-last (lambda (_) #f))
+       (and onrelease (swap! now onrelease canvas event down last))
+       (send canvas on-paint))]
+    ['motion
+     (let ([onmove (mode-onmove (state-mode (unbox now)))])
+       (and onmove (swap! now onmove canvas event)))]
+    ['right-down (swap! now update 'mode next-mode)
+                 (send canvas on-paint)]))
+
 (define (card-canvas% now)
   (class canvas%
     (define/override (on-char event)
@@ -59,25 +80,7 @@
     (define/override (on-event event)
       (when (unbox debug)
         (printf "state: ~s~n" (unbox now)))
-      (case (send event get-event-type)
-        ['left-down
-         (swap! now update 'mouse-down (lambda (_) event))
-         (let ([onclick (mode-onclick (state-mode (unbox now)))])
-           (and onclick (swap! now onclick this event))
-           (send this on-paint))]
-        ['left-up
-         (let ([down (state-mouse-down (unbox now))]
-               [last (state-mouse-last (unbox now))]
-               [onrelease (mode-onrelease (state-mode (unbox now)))])
-           (swap! now update 'mouse-down (lambda (_) #f))
-           (swap! now update 'mouse-last (lambda (_) #f))
-           (and onrelease (swap! now onrelease this event down last))
-           (send this on-paint))]
-        ['motion
-         (let ([onmove (mode-onmove (state-mode (unbox now)))])
-           (and onmove (swap! now onmove this event)))]
-        ['right-down (swap! now update 'mode next-mode)
-                     (send this on-paint)]))
+      (handle-mouse now this event))
     (super-new)))
 
 (define (mode-border mode dc canvas)
@@ -226,7 +229,7 @@
     now))
 
 (define modes `#hash(("explore" . ,(mode "explore" "white" '()
-                                        explore-click #f #f #f "buttons"))
+                                         explore-click #f #f #f "buttons"))
                      ("buttons" . ,(mode "buttons" "blue" '()
                                          #f button-release
                                          button-move button-paint "draw"))
