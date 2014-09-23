@@ -203,21 +203,11 @@
 (define (stack-filename->name filename)
   (first (string-split (path->string (file-name-from-path filename)) ".")))
 
-;; TODO: just use reader here
-(define (load-stack filename)
-  (stack (stack-filename->name filename)
-         (for/hash [(b (call-with-input-file filename read))]
-           (match b
-             [(list name background buttons)
-              (values name (card name background
-                                 (map (curry apply button) buttons)))]))
-         800 600))
-
-(define (main stack-name . args)
-  (let* ([stack (load-stack stack-name)]
+(define (main filename . args)
+  (let* ([stack (call-with-input-file filename read)]
          [first-card (first (hash-keys (stack-cards stack)))]
          [now (box (state first-card stack (hash-ref modes "explore") #f #f))]
-         [frame (new frame% [label stack-name]
+         [frame (new frame% [label filename]
                      [width (stack-width stack)] [height (stack-height stack)])]
          [canvas (new (card-canvas% now) [parent frame]
                       [paint-callback (curry paint now)])])
