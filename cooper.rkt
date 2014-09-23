@@ -7,7 +7,7 @@
 
 (struct button (corners action) #:prefab)
 
-(struct stack (name cards) #:prefab)
+(struct stack (name cards width height) #:prefab)
 
 (struct state (card stack mode mouse-down mouse-last) #:prefab)
 
@@ -209,20 +209,22 @@
 (define (stack-filename->name filename)
   (first (string-split (path->string (file-name-from-path filename)) ".")))
 
+;; TODO: just use reader here
 (define (load-stack filename)
   (stack (stack-filename->name filename)
          (for/hash [(b (call-with-input-file filename read))]
            (match b
              [(list name background buttons)
               (values name (card name background
-                                 (map (curry apply button) buttons)))]))))
+                                 (map (curry apply button) buttons)))]))
+         800 600))
 
 (define (main stack-name . args)
-  (let* ([main-stack (load-stack stack-name)]
-         [first-card (first (hash-keys (stack-cards main-stack)))]
-         [now (box (state first-card main-stack
-                          (hash-ref modes "explore") #f #f))]
-         [frame (new frame% [label stack-name])]
+  (let* ([stack (load-stack stack-name)]
+         [first-card (first (hash-keys (stack-cards stack)))]
+         [now (box (state first-card stack (hash-ref modes "explore") #f #f))]
+         [frame (new frame% [label stack-name]
+                     [width (stack-width stack)] [height (stack-height stack)])]
          [canvas (new (card-canvas% now) [parent frame]
                       [paint-callback (curry paint now)])])
     (send frame show #t)
