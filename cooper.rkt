@@ -63,8 +63,7 @@
         (swap! now update 'mouse-last (lambda (_) #f)))
       (when (eq? 'motion (send event get-event-type))
         (let ([onmove (mode-onmove (state-mode (unbox now)))])
-          (and onmove (swap! now onmove this event))
-          (send this on-paint)))
+          (and onmove (swap! now onmove this event))))
       (when (eq? 'right-down (send event get-event-type))
         (swap! now update 'mode next-mode)
         (send this on-paint)))
@@ -157,7 +156,9 @@
 
 (define (button-move state canvas event)
   (if (state-mouse-down state)
-      (update state 'mouse-last (lambda (_) event))
+      (let ([state (update state 'mouse-last (lambda (_) event))])
+        (send canvas on-paint)
+        state)
       state))
 
 
@@ -187,7 +188,10 @@
             (send last get-x) (send last get-y)))))
 
 (define (draw-move state canvas event)
-  (update state 'mouse-last (lambda (_) event)))
+  (let ([state (update state 'mouse-last (lambda (_) event))])
+    (when (state-mouse-down state)
+      (send canvas on-paint))
+    state))
 
 
 ;;; cards mode
