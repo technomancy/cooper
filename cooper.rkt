@@ -50,7 +50,7 @@
              (equal? (send event get-key-code) #\s))
     (let ([filename (put-file "Save to:")])
       (when filename
-        (call-with-output-file filename (curry write (unbox now)))))))
+        (call-with-output-file filename (curry write (state-stack (unbox now))))))))
 
 (define (handle-mouse now canvas event)
   (case (send event get-event-type)
