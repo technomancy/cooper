@@ -50,17 +50,19 @@
     (define/override (on-event event)
       (when (unbox debug)
         (printf "state: ~s~n" (unbox now)))
-      ;; TODO: clean this up
       (when (eq? 'left-down (send event get-event-type))
+        (swap! now update 'mouse-down (lambda (_) event))
         (let ([onclick (mode-onclick (state-mode (unbox now)))])
           (and onclick (swap! now onclick this event))
           (send this on-paint)))
       (when (eq? 'left-up (send event get-event-type))
-        (let ([onrelease (mode-onrelease (state-mode (unbox now)))])
-          (and onrelease (swap! now onrelease this event))
-          (send this on-paint))
-        (swap! now update 'mouse-down (lambda (_) #f))
-        (swap! now update 'mouse-last (lambda (_) #f)))
+        (let ([down (state-mouse-down (unbox now))]
+              [last (state-mouse-last (unbox now))]
+              [onrelease (mode-onrelease (state-mode (unbox now)))])
+          (swap! now update 'mouse-down (lambda (_) #f))
+          (swap! now update 'mouse-last (lambda (_) #f))
+          (and onrelease (swap! now onrelease this event down last))
+          (send this on-paint)))
       (when (eq? 'motion (send event get-event-type))
         (let ([onmove (mode-onmove (state-mode (unbox now)))])
           (and onmove (swap! now onmove this event))))
@@ -111,9 +113,6 @@
 
 ;;; buttons mode
 
-(define (button-click state canvas event)
-  (update state 'mouse-down (lambda (_) event)))
-
 (define (make-button-corners down-event up-event)
   (list (min (send down-event get-x) (send up-event get-x))
         (min (send down-event get-y) (send up-event get-y))
@@ -123,9 +122,8 @@
 (define (existing-card? state card-name)
   (member card-name (hash-keys (stack-cards (state-stack state)))))
 
-(define (button-release state canvas event)
-  (update state 'mouse-down (lambda (_) #f))
-  (let ([corners (make-button-corners (state-mouse-down state) event)]
+(define (button-release state canvas event down last)
+  (let ([corners (make-button-corners down last)]
         [target (get-text-from-user "card" "which card?"
                                     #:validate (curry existing-card? state))])
     (if target
@@ -149,6 +147,7 @@
     (render-button button dc))
   (let ([down (state-mouse-down state)]
         [last (state-mouse-last state)])
+    ;; TODO: this hasn't made it into the state record yet
     (when (and down last)
       (render-button (button (list (send down get-x) (send down get-y)
                                    (send last get-x) (send last get-y))
@@ -164,19 +163,14 @@
 
 ;;; draw mode
 
-(define (draw-click state canvas event)
-  (update state 'mouse-down (lambda (_) event)))
-
-(define (draw-release state canvas event)
-  (let* ([down-event (state-mouse-down state)]
-         [state (update state 'mouse-last (lambda (_) event))])
-    (update state 'stack
-            update 'cards hash-update (state-card state)
-            update 'background (flip cons) (list 'draw-line
-                                                 (send down-event get-x)
-                                                 (send down-event get-y)
-                                                 (send event get-x)
-                                                 (send event get-y)))))
+(define (draw-release state canvas event down last)
+  (update state 'stack
+          update 'cards hash-update (state-card state)
+          update 'background (flip cons) (list 'draw-line
+                                               (send down get-x)
+                                               (send down get-y)
+                                               (send last get-x)
+                                               (send last get-y))))
 
 (define (draw-paint state dc canvas)
   (send dc set-pen "black" 1 'solid)
@@ -233,11 +227,10 @@
 (define modes `#hash(("explore" . ,(mode "explore" "white" '()
                                         explore-click #f #f #f "buttons"))
                      ("buttons" . ,(mode "buttons" "blue" '()
-                                         button-click button-release
+                                         #f button-release
                                          button-move button-paint "draw"))
                      ("draw" . ,(mode "draw" "red" '()
-                                      draw-click draw-release
-                                      draw-move draw-paint
+                                      #f draw-release draw-move draw-paint
                                       "cards"))
                      ("cards" . ,(mode "cards" "green" '()
                                        cards-click #f #f #f "explore"))))
