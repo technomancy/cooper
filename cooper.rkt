@@ -9,7 +9,7 @@
 
 (struct stack (name cards width height) #:prefab)
 
-(struct state (card stack mode mouse-down mouse-last) #:prefab)
+(struct state (card stack mode mouse) #:prefab)
 
 (struct mode (name color submodes onclick onrelease onmove paint next)
         #:prefab)
@@ -17,7 +17,7 @@
 
 ;;; helpers
 
-;; TODO: figure out how to do this without eval
+;; TODO: use functional struct macro
 (define (update x field f . args)
   (let-values ([(type _) (struct-info x)])
     (let* ([function-name (format "~s-~s" (object-name type) field)]
@@ -60,16 +60,15 @@
 (define (handle-mouse now canvas event)
   (case (send event get-event-type)
     ['left-down
-     (swap! now update 'mouse-down (lambda (_) event))
+     (swap! now update 'mouse hash-set 'down event)
      (let ([onclick (mode-onclick (state-mode (unbox now)))])
        (and onclick (swap! now onclick canvas event))
        (send canvas refresh))]
     ['left-up
-     (let ([down (state-mouse-down (unbox now))]
-           [last (state-mouse-last (unbox now))]
+     (let ([down (dict-ref (state-mouse (unbox now)) 'down #f)]
+           [last (dict-ref (state-mouse (unbox now)) 'last #f)]
            [onrelease (mode-onrelease (state-mode (unbox now)))])
-       (swap! now update 'mouse-down (lambda (_) #f))
-       (swap! now update 'mouse-last (lambda (_) #f))
+       (swap! now update 'mouse (lambda (_) (hash)))
        (and onrelease (swap! now onrelease canvas event down last))
        (send canvas refresh))]
     ['motion
@@ -111,7 +110,7 @@
 
 ;;; explore mode
 
-(define (button-hit? button event)
+(define (button-hit? event button)
   (match (button-corners button)
     [(list left top right bottom)
      (and (<= left (send event get-x) right)
@@ -121,7 +120,7 @@
   (when (unbox debug)
     (printf "Click: ~s ~s~n" (send event get-x) (send event get-y)))
   (or (for/or [(button (card-buttons (current-card st)))]
-        (if (button-hit? button event)
+        (if (button-hit? event button)
             (let [(action (button-action button))]
               (if (string? action)
                   (struct-copy state st [card action])
@@ -165,8 +164,8 @@
   (send dc set-pen "black" 1 'long-dash)
   (for ([button (card-buttons (current-card state))])
     (render-button button dc))
-  (let ([down (state-mouse-down state)]
-        [last (state-mouse-last state)])
+  (let ([down (dict-ref (state-mouse state) 'down #f)]
+        [last (dict-ref (state-mouse state) 'last #f)])
     ;; TODO: this hasn't made it into the state record yet
     (when (and down last)
       (render-button (button (list (send down get-x) (send down get-y)
@@ -174,8 +173,8 @@
                              "dummy") dc))))
 
 (define (button-move state canvas event)
-  (if (state-mouse-down state)
-      (let ([state (update state 'mouse-last (lambda (_) event))])
+  (if (dict-ref (state-mouse state) 'down #f)
+      (let ([state (update state 'mouse hash-set 'last event)])
         (send canvas refresh)
         state)
       state))
@@ -194,16 +193,16 @@
 
 (define (draw-paint state dc canvas)
   (send dc set-pen "black" 1 'solid)
-  (let ([down (state-mouse-down state)]
-        [last (state-mouse-last state)])
+  (let ([down (dict-ref (state-mouse state) 'down #f)]
+        [last (dict-ref (state-mouse state) 'last #f)])
     (when (and down last)
       (send dc draw-line
             (send down get-x) (send down get-y)
             (send last get-x) (send last get-y)))))
 
 (define (draw-move state canvas event)
-  (let ([state (update state 'mouse-last (lambda (_) event))])
-    (when (state-mouse-down state)
+  (let ([state (update state 'mouse hash-set 'last event)])
+    (when (dict-ref (state-mouse state) 'down #f)
       (send canvas refresh))
     state))
 
@@ -229,7 +228,7 @@
                     (stack (or filename "new")
                            (hash "first" (card "first" '() '())) 600 800))]
          [now (box (state (first (hash-keys (stack-cards stack)))
-                          stack (hash-ref modes "explore") #f #f))]
+                          stack (hash-ref modes "explore") (hash)))]
          [frame (new frame% [label (stack-name stack)]
                      [width (stack-width stack)] [height (stack-height stack)])]
          [canvas (new (card-canvas% now) [parent frame]
