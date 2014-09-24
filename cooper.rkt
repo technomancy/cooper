@@ -37,6 +37,9 @@
 (define (flip f)
   (lambda args (apply f (reverse args))))
 
+(define (replace lst old new)
+  (map (lambda (x) (if (equal? x old) new x)) lst))
+
 
 ;;; general
 
@@ -61,19 +64,20 @@
   (case (send event get-event-type)
     ['left-down
      (swap! now update 'mouse hash-set 'down event)
+     (swap! now update 'mouse hash-set 'last event)
      (let ([onclick (mode-onclick (state-mode (unbox now)))])
        (and onclick (swap! now onclick canvas event))
        (send canvas refresh))]
     ['left-up
-     (let ([down (dict-ref (state-mouse (unbox now)) 'down #f)]
-           [last (dict-ref (state-mouse (unbox now)) 'last #f)]
+     (let ([mouse (state-mouse (unbox now))]
            [onrelease (mode-onrelease (state-mode (unbox now)))])
        (swap! now update 'mouse (lambda (_) (hash)))
-       (and onrelease (swap! now onrelease canvas event down last))
+       (and onrelease (swap! now onrelease canvas event mouse))
        (send canvas refresh))]
     ['motion
      (let ([onmove (mode-onmove (state-mode (unbox now)))])
-       (and onmove (swap! now onmove canvas event)))]
+       (and onmove (swap! now onmove canvas event))
+       (swap! now update 'mouse hash-set 'last event))]
     ['right-down (swap! now update 'mode next-mode)
                  (send canvas refresh)]))
 
@@ -139,16 +143,21 @@
 (define (existing-card? state card-name)
   (member card-name (hash-keys (stack-cards (state-stack state)))))
 
-(define (button-release state canvas event down last)
-  (if (and down last)
-      (let ([corners (make-button-corners down last)]
-            [target (get-text-from-user "card" "which card?"
-                                        #:validate (curry existing-card? state))])
-        (if target
-            (update state 'stack
-                    update 'cards hash-update (state-card state)
-                    update 'buttons (flip cons) (button corners target))
-            state))
+(define (button-click state canvas event)
+  (let ([target-button (findf (curry button-hit? event)
+                              (card-buttons (current-card state)))])
+    (if target-button
+        (update state 'mouse hash-set 'target-button target-button)
+        state)))
+
+(define (button-release state canvas event mouse)
+  (if (not (hash-ref mouse 'target-button #f))
+      (let ([corners (make-button-corners (hash-ref mouse 'down)
+                                          (hash-ref mouse 'last))])
+        ;; TODO: edit button action
+        (update state 'stack
+                update 'cards hash-update (state-card state)
+                update 'buttons (flip cons) (button corners "")))
       state))
 
 (define (render-button button dc)
@@ -167,14 +176,37 @@
   (let ([down (dict-ref (state-mouse state) 'down #f)]
         [last (dict-ref (state-mouse state) 'last #f)])
     ;; TODO: this hasn't made it into the state record yet
-    (when (and down last)
+    (when (and down last (not (dict-ref (state-mouse state) 'target-button #f)))
       (render-button (button (list (send down get-x) (send down get-y)
                                    (send last get-x) (send last get-y))
                              "dummy") dc))))
 
+;; this is getting a bit out of hand
+(define (button-drag target event state)
+  (let* ([card-name (state-card state)]
+         [corners (button-corners target)]
+         [start-x (send (hash-ref (state-mouse state) 'last) get-x)]
+         [start-y (send (hash-ref (state-mouse state) 'last) get-y)]
+         [delta-x (- (send event get-x) start-x)]
+         [delta-y (- (send event get-y) start-y)]
+         [new-button (button (list (+ delta-x (first corners))
+                                   (+ delta-y (second corners))
+                                   (+ delta-x (third corners))
+                                   (+ delta-y (fourth corners)))
+                             (button-action target))]
+         [state (update state 'mouse hash-set 'target-button new-button)]
+         [state (update state 'mouse hash-set 'target-start-xy
+                  (list (send event get-x) (send event get-y)))])
+    (update state 'stack update 'cards
+            hash-update card-name update 'buttons
+            replace target new-button)))
+
 (define (button-move state canvas event)
   (if (dict-ref (state-mouse state) 'down #f)
-      (let ([state (update state 'mouse hash-set 'last event)])
+      (let* ([target-button (dict-ref (state-mouse state) 'target-button #f)]
+             [state (if target-button
+                       (button-drag target-button event state)
+                       state)])
         (send canvas refresh)
         state)
       state))
@@ -182,14 +214,16 @@
 
 ;;; draw mode
 
-(define (draw-release state canvas event down last)
-  (update state 'stack
-          update 'cards hash-update (state-card state)
-          update 'background (flip cons) (list 'draw-line
-                                               (send down get-x)
-                                               (send down get-y)
-                                               (send last get-x)
-                                               (send last get-y))))
+(define (draw-release state canvas event mouse)
+  (let ([down (hash-ref mouse 'down)]
+        [last (hash-ref mouse 'last)])
+    (update state 'stack
+            update 'cards hash-update (state-card state)
+            update 'background (flip cons) (list 'draw-line
+                                                 (send down get-x)
+                                                 (send down get-y)
+                                                 (send last get-x)
+                                                 (send last get-y)))))
 
 (define (draw-paint state dc canvas)
   (send dc set-pen "black" 1 'solid)
@@ -201,10 +235,9 @@
             (send last get-x) (send last get-y)))))
 
 (define (draw-move state canvas event)
-  (let ([state (update state 'mouse hash-set 'last event)])
-    (when (dict-ref (state-mouse state) 'down #f)
-      (send canvas refresh))
-    state))
+  (when (dict-ref (state-mouse state) 'down #f)
+    (send canvas refresh))
+  state)
 
 
 ;;; cards mode
@@ -239,7 +272,7 @@
 (define modes `#hash(("explore" . ,(mode "explore" "white" '()
                                          explore-click #f #f #f "buttons"))
                      ("buttons" . ,(mode "buttons" "blue" '()
-                                         #f button-release
+                                         button-click button-release
                                          button-move button-paint "draw"))
                      ("draw" . ,(mode "draw" "red" '()
                                       #f draw-release draw-move draw-paint
