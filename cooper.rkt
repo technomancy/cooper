@@ -63,7 +63,7 @@
      (swap! now update 'mouse-down (lambda (_) event))
      (let ([onclick (mode-onclick (state-mode (unbox now)))])
        (and onclick (swap! now onclick canvas event))
-       (send canvas on-paint))]
+       (send canvas refresh))]
     ['left-up
      (let ([down (state-mouse-down (unbox now))]
            [last (state-mouse-last (unbox now))]
@@ -71,12 +71,12 @@
        (swap! now update 'mouse-down (lambda (_) #f))
        (swap! now update 'mouse-last (lambda (_) #f))
        (and onrelease (swap! now onrelease canvas event down last))
-       (send canvas on-paint))]
+       (send canvas refresh))]
     ['motion
      (let ([onmove (mode-onmove (state-mode (unbox now)))])
        (and onmove (swap! now onmove canvas event)))]
     ['right-down (swap! now update 'mode next-mode)
-                 (send canvas on-paint)]))
+                 (send canvas refresh)]))
 
 (define (card-canvas% now)
   (class canvas%
@@ -98,6 +98,7 @@
   (send dc set-brush "white" 'solid)
   (mode-border (state-mode (unbox now)) dc canvas)
   (send dc set-pen "black" 1 'solid) ;; default
+  (send dc set-smoothing 'unsmoothed)
   (for [(step (card-background (current-card (unbox now))))]
     (apply dynamic-send dc step))
   (let ([painter (mode-paint (state-mode (unbox now)))])
@@ -175,7 +176,7 @@
 (define (button-move state canvas event)
   (if (state-mouse-down state)
       (let ([state (update state 'mouse-last (lambda (_) event))])
-        (send canvas on-paint)
+        (send canvas refresh)
         state)
       state))
 
@@ -203,7 +204,7 @@
 (define (draw-move state canvas event)
   (let ([state (update state 'mouse-last (lambda (_) event))])
     (when (state-mouse-down state)
-      (send canvas on-paint))
+      (send canvas refresh))
     state))
 
 
