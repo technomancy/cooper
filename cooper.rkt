@@ -3,7 +3,7 @@
 
 ;;; types
 
-(struct card (name background buttons) #:prefab)
+(struct card (name background buttons events) #:prefab)
 
 (struct button (corners action) #:prefab)
 
@@ -82,6 +82,7 @@
        (and onmove (swap! now onmove canvas event))
        (swap! now update 'mouse hash-set 'last event))]
     ['right-down (swap! now update 'mode next-mode)
+                 (swap! now update 'mouse (lambda (_) (hash)))
                  (send canvas refresh)]))
 
 (define (card-canvas% now semaphore)
@@ -274,7 +275,7 @@
   (let ([card-name (get-text-from-user "card" "New card name:")])
     (if card-name
         (update state 'stack
-                update 'cards hash-set card-name (card card-name '() '()))
+                update 'cards hash-set card-name (card card-name '() '() (hash)))
         state)))
 
 
@@ -287,7 +288,7 @@
   (let* ([stack (if (and filename (file-exists? filename))
                     (call-with-input-file filename read)
                     (stack (or filename "new")
-                           (hash "first" (card "first" '() '())) 600 800))]
+                           (hash "first" (card "first" '() '() (hash))) 600 800))]
          [now (box (state (first (hash-keys (stack-cards stack)))
                           stack (hash-ref modes "explore") (hash) (hash)))]
          [frame (new frame% [label (stack-name stack)]
