@@ -84,14 +84,16 @@
     ['right-down (swap! now update 'mode next-mode)
                  (send canvas refresh)]))
 
-(define (card-canvas% now)
+(define (card-canvas% now semaphore)
   (class canvas%
     (define/override (on-char event)
       (handle-key now event))
     (define/override (on-event event)
       (when (unbox debug)
         (printf "state: ~s~n" (unbox now)))
-      (handle-mouse now this event))
+      (when (semaphore-try-wait? semaphore)
+        (handle-mouse now this event)
+        (semaphore-post semaphore))) ; TODO: finally
     (super-new)))
 
 (define (mode-border mode dc canvas)
@@ -282,7 +284,7 @@
                           stack (hash-ref modes "explore") (hash) (hash)))]
          [frame (new frame% [label (stack-name stack)]
                      [width (stack-width stack)] [height (stack-height stack)])]
-         [canvas (new (card-canvas% now) [parent frame]
+         [canvas (new (card-canvas% now (make-semaphore 1)) [parent frame]
                       [paint-callback (curry paint now)])])
     (send frame show #t)
     now))
