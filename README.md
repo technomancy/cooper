@@ -2,12 +2,23 @@
 
 <img src="http://p.hagelb.org/cooper.jpg" />
 
+A primitive HyperCard clone, sort of.
+
 ## Modes
+
+Right-click to change modes.
 
 * explore (white border)
 * buttons (blue border)
 * drawing (red border)
 * cards (green border)
+
+Buttons are invisible unless you're in "buttons" mode. Double-click a
+button to give it a target card name for when it's clicked in explore mode.
+
+Drawing is only straight lines for now.
+
+Click while in "cards" mode to add a new card.
 
 ## License
 
