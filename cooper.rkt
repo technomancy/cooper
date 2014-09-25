@@ -131,15 +131,21 @@
     (printf "Click: ~s ~s~n" (send event get-x) (send event get-y)))
   (or (for/or [(button (card-buttons (current-card state)))]
         (if (button-hit? event button)
-            (let* ([action (button-action button)]
-                   [state ((or (hash-ref (card-events (current-card state))
-                                         'leave identity)) state)]
-                   [state (if (string? action)
-                              (update state 'card (lambda (_) action))
-                              (action state))]
-                   [state ((or (hash-ref (card-events (current-card state))
-                                         'enter identity)) state)])
-              state)
+            (if (hash-ref (stack-cards (state-stack state))
+                          (button-action button) #f)
+                (let* ([action (button-action button)]
+                       ;; hash-ref special-cases procedures in the not-found arg
+                       ;; which makes this more awkward than it should be
+                       [state ((or (hash-ref (card-events (current-card state))
+                                             'leave #f) identity) state)]
+                       [state (if (string? action)
+                                  (update state 'card (lambda (_) action))
+                                  (action state))]
+                       [state ((or (hash-ref (card-events (current-card state))
+                                             'enter #f) identity) state)])
+                  state)
+                (begin (printf "Unknown card: ~s~n" (button-action button))
+                       state))
             #f)) state))
 
 
@@ -157,7 +163,8 @@
 (define double-click-threshold 500)
 
 (define (double-click? mouse last-mouse)
-  (> double-click-threshold (- (hash-ref mouse 'at) (hash-ref last-mouse 'at))))
+  (> double-click-threshold (- (hash-ref mouse 'at)
+                               (hash-ref last-mouse 'at 0))))
 
 (define (button-edit state target-button)
   (let* ([action (get-text-from-user "card" "Card: ")]
@@ -274,14 +281,45 @@
   state)
 
 
-;;; cards mode
+;;; first card
 
-(define (cards-click state canvas event)
-  (let ([card-name (get-text-from-user "card" "New card name:")])
-    (if card-name
-        (update state 'stack
-                update 'cards hash-set card-name (card card-name '() '() (hash)))
-        state)))
+(define zero-label-x-offset 25)
+
+(define zero-label-y-offset 30)
+
+(define (zero-draw-card card i bg)
+  (cons (list 'draw-text (card-name card)
+              zero-label-x-offset (* zero-label-y-offset (add1 i))) bg))
+
+(define (zero-place-button card i buttons)
+  (printf "zero-button ~s~n" i)
+  (cons (button (list zero-label-x-offset (* zero-label-y-offset (add1 i))
+                      ;; TODO: 200 is nonsense here
+                      200 (* zero-label-y-offset (+ 2 i))) (card-name card))
+        buttons))
+
+(define (zero-buttons stack card)
+  ;; TODO: unify these
+  (let* ([draw-labels (lambda (bg)
+                        (foldl zero-draw-card bg
+                               (hash-values (stack-cards stack))
+                               (range (hash-count (stack-cards stack)))))]
+         [place-jump-buttons (lambda (buttons)
+                               (foldl zero-place-button buttons
+                                      (hash-values (stack-cards stack))
+                                      (range (hash-count (stack-cards stack)))))]
+        [card (update card 'background draw-labels)])
+    (update card 'buttons place-jump-buttons)))
+
+(define (zero-enter state)
+  ;; TODO: new card button
+  ;; TODO: delete button
+  (update state 'stack update 'cards hash-update (state-card state)
+          (curry zero-buttons (state-stack state))))
+
+(define card-zero (card "zero" '() '() (hash "enter" zero-enter)))
+
+(define card-one (card "one" '() '() (hash)))
 
 
 ;;; loading
@@ -292,10 +330,10 @@
 (define (main [filename #f] . args)
   (let* ([stack (if (and filename (file-exists? filename))
                     (call-with-input-file filename read)
-                    (stack (or filename "new")
-                           (hash "first" (card "first" '() '() (hash))) 600 800))]
-         [now (box (state (first (hash-keys (stack-cards stack)))
-                          stack (hash-ref modes "explore") (hash) (hash)))]
+                    (stack (or filename "new") (hash "zero" card-zero
+                                                     "one" card-one) 800 600))]
+         [now (box (zero-enter (state "zero" stack (hash-ref modes "explore")
+                                      (hash) (hash))))]
          [frame (new frame% [label (stack-name stack)]
                      [width (stack-width stack)] [height (stack-height stack)])]
          [canvas (new (card-canvas% now (make-semaphore 1)) [parent frame]
@@ -310,9 +348,7 @@
                                          button-move button-paint "draw"))
                      ("draw" . ,(mode "draw" "red" '()
                                       #f draw-release draw-move draw-paint
-                                      "cards"))
-                     ("cards" . ,(mode "cards" "green" '()
-                                       cards-click #f #f #f "explore"))))
+                                      "explore"))))
 
 ;; for quick testing
 ;; (main "mystack.rkt")
