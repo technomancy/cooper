@@ -154,7 +154,6 @@
   (> double-click-threshold (- (hash-ref mouse 'at) (hash-ref last-mouse 'at))))
 
 (define (button-edit state target-button)
-  ;; TODO: support resizes too
   (let* ([action (get-text-from-user "card" "Card: ")]
          [new-button (button (button-corners target-button) action)])
     (update state 'stack update 'cards
@@ -195,24 +194,33 @@
     (render-button button dc))
   (let ([down (dict-ref (state-mouse state) 'down #f)]
         [last (dict-ref (state-mouse state) 'last #f)])
-    ;; TODO: this hasn't made it into the state record yet
     (when (and down last (not (dict-ref (state-mouse state) 'target-button #f)))
       (render-button (button (list (send down get-x) (send down get-y)
                                    (send last get-x) (send last get-y))
-                             "dummy") dc))))
+                             "") dc))))
 
-;; this is getting a bit out of hand
+(define button-resize-threshold 10)
+
+(define (button-corner-deltas corners click-x click-y dx dy)
+  ;; very repetitive, room for improvement here
+  (list (if (> (- (third corners) click-x) button-resize-threshold) dx 0)
+        (if (> (- (fourth corners) click-y) button-resize-threshold) dy 0)
+        (if (> (- click-x (first corners)) button-resize-threshold) dx 0)
+        (if (> (- click-y (second corners)) button-resize-threshold) dy 0)))
+
+(define (button-new-corners old-corners last-mouse new-mouse)
+  (let* ([start-x (send last-mouse get-x)]
+         [start-y (send last-mouse get-y)]
+         [delta-x (- (send new-mouse get-x) start-x)]
+         [delta-y (- (send new-mouse get-y) start-y)])
+    (map + (button-corner-deltas old-corners start-x start-y
+                                 delta-x delta-y) old-corners)))
+
 (define (button-drag target event state)
   (let* ([card-name (state-card state)]
-         [corners (button-corners target)]
-         [start-x (send (hash-ref (state-mouse state) 'last) get-x)]
-         [start-y (send (hash-ref (state-mouse state) 'last) get-y)]
-         [delta-x (- (send event get-x) start-x)]
-         [delta-y (- (send event get-y) start-y)]
-         [new-button (button (list (+ delta-x (first corners))
-                                   (+ delta-y (second corners))
-                                   (+ delta-x (third corners))
-                                   (+ delta-y (fourth corners)))
+         [last-mouse (hash-ref (state-mouse state) 'last)]
+         [new-button (button (button-new-corners (button-corners target)
+                                                 last-mouse event)
                              (button-action target))]
          [state (update state 'mouse hash-set 'target-button new-button)]
          [state (update state 'mouse hash-set 'target-start-xy
