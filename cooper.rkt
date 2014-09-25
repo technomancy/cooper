@@ -126,16 +126,21 @@
      (and (<= left (send event get-x) right)
           (<= top (send event get-y) bottom))]))
 
-(define (explore-click st canvas event)
+(define (explore-click state canvas event)
   (when (unbox debug)
     (printf "Click: ~s ~s~n" (send event get-x) (send event get-y)))
-  (or (for/or [(button (card-buttons (current-card st)))]
+  (or (for/or [(button (card-buttons (current-card state)))]
         (if (button-hit? event button)
-            (let [(action (button-action button))]
-              (if (string? action)
-                  (struct-copy state st [card action])
-                  (action st)))
-            #f)) st))
+            (let* ([action (button-action button)]
+                   [state ((or (hash-ref (card-events (current-card state))
+                                         'leave identity)) state)]
+                   [state (if (string? action)
+                              (update state 'card (lambda (_) action))
+                              (action state))]
+                   [state ((or (hash-ref (card-events (current-card state))
+                                         'enter identity)) state)])
+              state)
+            #f)) state))
 
 
 ;;; buttons mode
