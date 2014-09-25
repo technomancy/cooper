@@ -9,7 +9,7 @@
 
 (struct stack (name cards width height) #:prefab)
 
-(struct state (card stack mode mouse) #:prefab)
+(struct state (card stack mode mouse last-mouse) #:prefab)
 
 (struct mode (name color submodes onclick onrelease onmove paint next)
         #:prefab)
@@ -51,6 +51,7 @@
 (define (handle-key now event)
   (when (send event get-control-down)
     (case (send event get-key-code)
+      ;; TODO: add clear background key, quit key
       [(#\s) (let ([filename (put-file "Save to:")])
                (when filename
                  (call-with-output-file filename
@@ -65,6 +66,7 @@
     ['left-down
      (swap! now update 'mouse hash-set 'down event)
      (swap! now update 'mouse hash-set 'last event)
+     (swap! now update 'mouse hash-set 'at (current-milliseconds))
      (let ([onclick (mode-onclick (state-mode (unbox now)))])
        (and onclick (swap! now onclick canvas event))
        (send canvas refresh))]
@@ -72,6 +74,7 @@
      (let ([mouse (state-mouse (unbox now))]
            [onrelease (mode-onrelease (state-mode (unbox now)))])
        (swap! now update 'mouse (lambda (_) (hash)))
+       (swap! now update 'last-mouse (lambda (_) mouse))
        (and onrelease (swap! now onrelease canvas event mouse))
        (send canvas refresh))]
     ['motion
@@ -143,18 +146,33 @@
 (define (existing-card? state card-name)
   (member card-name (hash-keys (stack-cards (state-stack state)))))
 
+(define double-click-threshold 500)
+
+(define (double-click? mouse last-mouse)
+  (> double-click-threshold (- (hash-ref mouse 'at) (hash-ref last-mouse 'at))))
+
+(define (button-edit state target-button)
+  ;; TODO: support resizes too
+  (let* ([action (get-text-from-user "card" "Card: ")]
+         [new-button (button (button-corners target-button) action)])
+    (update state 'stack update 'cards
+            hash-update (state-card state) update 'buttons
+            replace target-button new-button)))
+
 (define (button-click state canvas event)
   (let ([target-button (findf (curry button-hit? event)
                               (card-buttons (current-card state)))])
     (if target-button
-        (update state 'mouse hash-set 'target-button target-button)
+        (let ([state (update state 'mouse hash-set 'target-button target-button)])
+          (if (double-click? (state-mouse state) (state-last-mouse state))
+              (button-edit state target-button)
+              state))
         state)))
 
 (define (button-release state canvas event mouse)
   (if (not (hash-ref mouse 'target-button #f))
       (let ([corners (make-button-corners (hash-ref mouse 'down)
                                           (hash-ref mouse 'last))])
-        ;; TODO: edit button action
         (update state 'stack
                 update 'cards hash-update (state-card state)
                 update 'buttons (flip cons) (button corners "")))
@@ -261,7 +279,7 @@
                     (stack (or filename "new")
                            (hash "first" (card "first" '() '())) 600 800))]
          [now (box (state (first (hash-keys (stack-cards stack)))
-                          stack (hash-ref modes "explore") (hash)))]
+                          stack (hash-ref modes "explore") (hash) (hash)))]
          [frame (new frame% [label (stack-name stack)]
                      [width (stack-width stack)] [height (stack-height stack)])]
          [canvas (new (card-canvas% now) [parent frame]
