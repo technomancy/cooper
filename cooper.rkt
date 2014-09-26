@@ -14,6 +14,9 @@
 (struct mode (name color submodes onclick onrelease onmove paint next)
         #:prefab)
 
+(define (current-card state)
+  (hash-ref (stack-cards (state-stack state)) (state-card state)))
+
 
 ;;; helpers
 
@@ -41,7 +44,7 @@
   (map (lambda (x) (if (equal? x old) new x)) lst))
 
 
-;;; general
+;;; imperative bits
 
 (define debug (box #f))
 
@@ -51,7 +54,6 @@
 (define (handle-key now event)
   (when (send event get-control-down)
     (case (send event get-key-code)
-      ;; TODO: add clear background key, quit key
       [(#\s) (let ([filename (put-file "Save to:")])
                (when filename
                  (call-with-output-file filename
@@ -59,10 +61,15 @@
       [(#\l) (let ([filename (get-file "Load:")])
                (when filename
                  (swap! now update 'stack
-                        (lambda (_) (call-with-input-file filename read)))))])))
+                        (lambda (_) (call-with-input-file filename read)))))]
+      [(#\c) (swap! now update 'stack update 'cards
+                    hash-update (state-card (unbox now))
+                    update 'background (lambda (_) '()))]
+      [(#\0) (swap! now update 'card (lambda (_) "zero"))])))
 
 (define (handle-mouse now canvas event)
   (case (send event get-event-type)
+    ;; TODO: clauses should begin with a list, not quote
     ['left-down
      (swap! now update 'mouse hash-set 'down event)
      (swap! now update 'mouse hash-set 'last event)
@@ -106,16 +113,13 @@
   (send dc clear)
   (send dc set-brush "white" 'solid)
   (mode-border (state-mode (unbox now)) dc canvas)
-  (send dc set-pen "black" 1 'solid) ;; default
+  (send dc set-pen "black" 1 'solid) ; default
   (send dc set-smoothing 'unsmoothed)
   (for [(step (card-background (current-card (unbox now))))]
     (apply dynamic-send dc step))
   (let ([painter (mode-paint (state-mode (unbox now)))])
     (when painter
       (painter (unbox now) dc canvas))))
-
-(define (current-card state)
-  (hash-ref (stack-cards (state-stack state)) (state-card state)))
 
 
 ;;; explore mode
@@ -142,6 +146,7 @@
                                   (action state))]
                        [state ((or (hash-ref (card-events (current-card state))
                                              'enter #f) identity) state)])
+                  ;; arrow here? or compose?
                   state)
                 (begin (printf "Unknown card: ~s~n" (button-action button))
                        state))

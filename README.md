@@ -17,6 +17,12 @@ button to give it a target card name for when it's clicked in explore mode.
 
 Drawing is only straight lines for now.
 
+Card Zero is where you start; it's a card that gets prepopulated with
+a self-hosted card listing/editing interface. If you get lost at any
+point, control-0 will return you to card zero.
+
+Control-s saves, and control-l loads.
+
 ## License
 
 Copyright © 2014 Phil Hagelberg and contributors
