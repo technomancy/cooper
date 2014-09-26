@@ -94,14 +94,14 @@
 
 (define (card-canvas% now semaphore)
   (class canvas%
+    (when (unbox debug)
+      (printf "state: ~s~n" (unbox now)))
     (define/override (on-char event)
-      (handle-key now event))
+      (handle-key now event)
+      (send this refresh))
     (define/override (on-event event)
-      (when (unbox debug)
-        (printf "state: ~s~n" (unbox now)))
-      (when (semaphore-try-wait? semaphore)
-        (handle-mouse now this event)
-        (semaphore-post semaphore))) ; TODO: finally
+      (call-with-semaphore semaphore handle-mouse
+                           (lambda () #f) now this event))
     (super-new)))
 
 (define (mode-border mode dc canvas)
