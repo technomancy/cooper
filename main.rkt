@@ -61,7 +61,9 @@
       [(#\l) (let ([filename (get-file "Load:")])
                (when filename
                  (swap! now update 'stack
-                        (lambda (_) (call-with-input-file filename read)))))]
+                        (lambda (_) (call-with-input-file filename read)))
+                 ;; TODO: not all stacks have a zero card?
+                 (swap! now update 'card (lambda (_) "zero"))))]
       [(#\c) (swap! now update 'stack update 'cards
                     hash-update (state-card (unbox now))
                     update 'background (lambda (_) '()))]
@@ -135,19 +137,17 @@
         (if (button-hit? event button)
             (if (or (hash-ref (stack-cards (state-stack state))
                               (button-action button) #f)
-                    (procedure? (button-action button)))
+                    (procedure? (eval (button-action button))))
                 (let* ([action (button-action button)]
-                       ;; hash-ref special-cases procedures in the not-found arg
-                       ;; which makes this more awkward than it should be
-                       [state ((or (hash-ref (card-events (current-card state))
-                                             'leave #f) identity) state)]
-                       [state (if (string? action)
-                                  (update state 'card (lambda (_) action))
-                                  (action state))]
-                       [state ((or (hash-ref (card-events (current-card state))
-                                             'enter #f) identity) state)])
-                  ;; arrow here? or compose?
-                  state)
+                       [leave (hash-ref (card-events (current-card state))
+                                        'leave 'identity)]
+                       [action (if (string? action)
+                                   (lambda (state)
+                                     (update state 'card (lambda (_) action)))
+                                   action)]
+                       [enter (hash-ref (card-events (current-card state))
+                                        'enter 'identity)])
+                  ((apply compose (map eval (list enter action leave))) state))
                 (begin (printf "Unknown card: ~s~n" (button-action button))
                        state))
             #f)) state))
@@ -325,9 +325,9 @@
                             (card card-name '() '() (hash))))
         state)))
 
-(define zero-new-card-button (button '(0 0 15 20) zero-new-card))
+(define zero-new-card-button (button '(0 0 15 20) 'zero-new-card))
 
-(define card-zero (card "zero" '() '() (hash "enter" zero-enter)))
+(define card-zero (card "zero" '() '() (hash "enter" 'zero-enter)))
 
 (define card-one (card "one" '() '() (hash)))
 
@@ -360,5 +360,7 @@
                                       #f draw-release draw-move draw-paint
                                       "explore"))))
 
+(module+ main
+  (main))
 ;; for quick testing
 ;; (main "mystack.rkt")
