@@ -127,12 +127,11 @@
           (<= top (send event get-y) bottom))]))
 
 (define (explore-click state canvas event)
-  (when (unbox debug)
-    (printf "Click: ~s ~s~n" (send event get-x) (send event get-y)))
   (or (for/or [(button (card-buttons (current-card state)))]
         (if (button-hit? event button)
-            (if (hash-ref (stack-cards (state-stack state))
-                          (button-action button) #f)
+            (if (or (hash-ref (stack-cards (state-stack state))
+                              (button-action button) #f)
+                    (procedure? (button-action button)))
                 (let* ([action (button-action button)]
                        ;; hash-ref special-cases procedures in the not-found arg
                        ;; which makes this more awkward than it should be
@@ -287,35 +286,41 @@
 
 (define zero-label-y-offset 30)
 
-(define (zero-draw-card card i bg)
+(define (zero-draw-label card i bg)
   (cons (list 'draw-text (card-name card)
               zero-label-x-offset (* zero-label-y-offset (add1 i))) bg))
 
 (define (zero-place-button card i buttons)
-  (printf "zero-button ~s~n" i)
   (cons (button (list zero-label-x-offset (* zero-label-y-offset (add1 i))
                       ;; TODO: 200 is nonsense here
                       200 (* zero-label-y-offset (+ 2 i))) (card-name card))
         buttons))
 
 (define (zero-buttons stack card)
-  ;; TODO: unify these
-  (let* ([draw-labels (lambda (bg)
-                        (foldl zero-draw-card bg
-                               (hash-values (stack-cards stack))
-                               (range (hash-count (stack-cards stack)))))]
-         [place-jump-buttons (lambda (buttons)
-                               (foldl zero-place-button buttons
-                                      (hash-values (stack-cards stack))
-                                      (range (hash-count (stack-cards stack)))))]
-        [card (update card 'background draw-labels)])
-    (update card 'buttons place-jump-buttons)))
+  (let* ([labels (foldl zero-draw-label '()
+                        (hash-values (stack-cards stack))
+                        (range (hash-count (stack-cards stack))))]
+         [jump-buttons (foldl zero-place-button '()
+                                    (hash-values (stack-cards stack))
+                                    (range (hash-count (stack-cards stack))))]
+         [card (update card 'background (lambda (_) (cons '(draw-text "+" 0 0)
+                                                          labels)))])
+    (update card 'buttons (lambda (_) (cons zero-new-card-button jump-buttons)))))
 
 (define (zero-enter state)
-  ;; TODO: new card button
   ;; TODO: delete button
   (update state 'stack update 'cards hash-update (state-card state)
           (curry zero-buttons (state-stack state))))
+
+(define (zero-new-card state)
+  (let ([card-name (get-text-from-user "card" "New card name:")])
+    (if card-name
+        (zero-enter (update state 'stack
+                            update 'cards hash-set card-name
+                            (card card-name '() '() (hash))))
+        state)))
+
+(define zero-new-card-button (button '(0 0 15 20) zero-new-card))
 
 (define card-zero (card "zero" '() '() (hash "enter" zero-enter)))
 
