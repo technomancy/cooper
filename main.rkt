@@ -5,7 +5,7 @@
 
 (struct card (name background buttons events) #:prefab)
 
-(struct button (corners action) #:prefab)
+(struct button (corners action visible? name) #:prefab)
 
 (struct stack (name cards width height) #:prefab)
 
@@ -123,6 +123,8 @@
   (send dc set-smoothing 'unsmoothed)
   (for [(step (card-background (current-card (unbox now))))]
     (apply dynamic-send dc step))
+  (for [(button (card-buttons (current-card (unbox now))))]
+    (render-button button dc #f))
   (let ([painter (mode-paint (state-mode (unbox now)))])
     (when painter
       (painter (unbox now) dc canvas))))
@@ -176,7 +178,7 @@
 
 (define (button-edit state target-button)
   (let* ([action (get-text-from-user "card" "Card: ")]
-         [new-button (button (button-corners target-button) action)])
+         [new-button (update target-button 'action (lambda (_) action))])
     (update state 'stack update 'cards
             hash-update (state-card state) update 'buttons
             replace target-button new-button)))
@@ -197,28 +199,35 @@
                                           (hash-ref mouse 'last))])
         (update state 'stack
                 update 'cards hash-update (state-card state)
-                update 'buttons (flip cons) (button corners "")))
+                update 'buttons (flip cons) (button corners "" #f #f)))
       state))
 
-(define (render-button button dc)
+(define (render-button button dc render-invisible?)
+  (if (button-visible? button)
+      (send dc set-pen "black" 1 'solid)
+      (send dc set-pen "black" 1 'long-dash))
   (match (button-corners button)
     [(list left top right bottom)
-     (send dc draw-rectangle
-           (min left right) (min top bottom)
-           (- (max left right) (min left right))
-           (- (max top bottom) (min top bottom)))]))
+     (when (or render-invisible? (button-visible? button))
+       (send dc draw-rectangle
+             (min left right) (min top bottom)
+             (- (max left right) (min left right))
+             (- (max top bottom) (min top bottom))))
+     (when (and (button-visible? button) (button-name button))
+       (send dc draw-text (button-name button) (+ 6 left) (+ 3 top)))]))
 
 (define (button-paint state dc canvas)
   (send dc set-brush "white" 'transparent)
-  (send dc set-pen "black" 1 'long-dash)
+  (send dc set-smoothing 'unsmoothed)
   (for ([button (card-buttons (current-card state))])
-    (render-button button dc))
+    (render-button button dc #t))
+  ;; if a button is currently being created
   (let ([down (dict-ref (state-mouse state) 'down #f)]
         [last (dict-ref (state-mouse state) 'last #f)])
     (when (and down last (not (dict-ref (state-mouse state) 'target-button #f)))
       (render-button (button (list (send down get-x) (send down get-y)
                                    (send last get-x) (send last get-y))
-                             "") dc))))
+                             "" #f #f) dc #t))))
 
 (define button-resize-threshold 10)
 
@@ -240,9 +249,7 @@
 (define (button-drag target event state)
   (let* ([card-name (state-card state)]
          [last-mouse (hash-ref (state-mouse state) 'last)]
-         [new-button (button (button-new-corners (button-corners target)
-                                                 last-mouse event)
-                             (button-action target))]
+         [new-button (update target 'corners button-new-corners last-mouse event)]
          [state (update state 'mouse hash-set 'target-button new-button)]
          [state (update state 'mouse hash-set 'target-start-xy
                   (list (send event get-x) (send event get-y)))])
@@ -291,33 +298,39 @@
 
 ;;; first card
 
-(define zero-label-x-offset 25)
+(define zero-button-x-offset 25)
 
-(define zero-label-y-offset 30)
-
-(define (zero-draw-label card i bg)
-  (cons (list 'draw-text (card-name card)
-              zero-label-x-offset (* zero-label-y-offset (add1 i))) bg))
+(define zero-button-y-offset 30)
 
 (define (zero-place-button card i buttons)
-  (cons (button (list zero-label-x-offset (* zero-label-y-offset (add1 i))
+  (cons (button (list zero-button-x-offset (* zero-button-y-offset (add1 i))
                       ;; TODO: 200 is nonsense here
-                      200 (* zero-label-y-offset (+ 2 i))) (card-name card))
+                      200 (- (* zero-button-y-offset (+ 2 i)) 5))
+                (card-name card) #t (card-name card))
+        buttons))
+
+(define (zero-delete-card card state)
+  (zero-enter (update state 'stack update 'cards hash-remove (card-name card))))
+
+(define (zero-place-delete-button card i buttons)
+  (cons (button (list (+ 220 zero-button-x-offset)
+                      (* zero-button-y-offset (add1 i))
+                      (+ 240 zero-button-x-offset)
+                      (- (* zero-button-y-offset (+ 2 i)) 5))
+                `(lambda (state) (zero-delete-card ,card state)) #t "x")
         buttons))
 
 (define (zero-buttons stack card)
-  (let* ([labels (foldl zero-draw-label '()
-                        (hash-values (stack-cards stack))
-                        (range (hash-count (stack-cards stack))))]
-         [jump-buttons (foldl zero-place-button '()
-                                    (hash-values (stack-cards stack))
-                                    (range (hash-count (stack-cards stack))))]
-         [card (update card 'background (lambda (_) (cons '(draw-text "+" 0 0)
-                                                          labels)))])
-    (update card 'buttons (lambda (_) (cons zero-new-card-button jump-buttons)))))
+  (let ([jump-buttons (foldl zero-place-button '()
+                             (hash-values (stack-cards stack))
+                             (range (hash-count (stack-cards stack))))]
+        [delete-buttons (foldl zero-place-delete-button '()
+                               (hash-values (stack-cards stack))
+                               (range (hash-count (stack-cards stack))))])
+    (update card 'buttons (lambda (_) (append (list zero-new-card-button)
+                                              jump-buttons delete-buttons)))))
 
 (define (zero-enter state)
-  ;; TODO: delete button
   (update state 'stack update 'cards hash-update (state-card state)
           (curry zero-buttons (state-stack state))))
 
@@ -329,7 +342,7 @@
                             (card card-name '() '() (hash))))
         state)))
 
-(define zero-new-card-button (button '(0 0 15 20) 'zero-new-card))
+(define zero-new-card-button (button '(0 0 25 30) 'zero-new-card #t "+"))
 
 (define card-zero (card "zero" '() '() (hash "enter" 'zero-enter)))
 
