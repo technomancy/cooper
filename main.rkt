@@ -70,6 +70,7 @@
       [(#\b) (swap! now update 'stack update 'cards
                     hash-update (state-card (unbox now))
                     update 'buttons (lambda (_) '()))]
+      ;; TODO: need zero-enter here
       [(#\0) (swap! now update 'card (lambda (_) "zero"))])
     (send canvas refresh)))
 
@@ -154,8 +155,15 @@
                        [enter (hash-ref (card-events (current-card state))
                                         'enter 'identity)])
                   ((apply compose (map eval (list enter action leave))) state))
-                (begin (printf "Unknown card: ~s~n" (button-action button))
-                       state))
+                (if (equal? (message-box "new card?"
+                                         (format "Unknown card ~s; create it?"
+                                                 (button-action button))
+                                         #f '[ok-cancel])'ok)
+                    (update state 'stack
+                            update 'cards hash-set (button-action button)
+                            (card (button-action button)
+                                  '() '() (hash)))
+                    state))
             #f)) state))
 
 
