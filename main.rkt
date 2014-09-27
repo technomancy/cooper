@@ -51,7 +51,7 @@
 (define (next-mode mode)
   (hash-ref modes (mode-next mode)))
 
-(define (handle-key now event)
+(define (handle-key now canvas event)
   (when (send event get-control-down)
     (case (send event get-key-code)
       [(#\s) (let ([filename (put-file "Save to:")])
@@ -67,7 +67,11 @@
       [(#\c) (swap! now update 'stack update 'cards
                     hash-update (state-card (unbox now))
                     update 'background (lambda (_) '()))]
-      [(#\0) (swap! now update 'card (lambda (_) "zero"))])))
+      [(#\b) (swap! now update 'stack update 'cards
+                    hash-update (state-card (unbox now))
+                    update 'buttons (lambda (_) '()))]
+      [(#\0) (swap! now update 'card (lambda (_) "zero"))])
+    (send canvas refresh)))
 
 (define (handle-mouse now canvas event)
   (case (send event get-event-type)
@@ -99,8 +103,8 @@
     (when (unbox debug)
       (printf "state: ~s~n" (unbox now)))
     (define/override (on-char event)
-      (handle-key now event)
-      (send this refresh))
+      (call-with-semaphore semaphore handle-key
+                           (lambda () #f) now this event))
     (define/override (on-event event)
       (call-with-semaphore semaphore handle-mouse
                            (lambda () #f) now this event))

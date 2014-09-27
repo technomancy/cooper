@@ -23,6 +23,8 @@ point, control-0 will return you to card zero.
 
 Control-s saves, and control-l loads.
 
+Control-c clears background, control-b clears buttons.
+
 ## License
 
 Copyright © 2014 Phil Hagelberg and contributors
