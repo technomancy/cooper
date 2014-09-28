@@ -28,10 +28,10 @@
       (eval (list 'struct-copy (object-name type) x
                   [list field `(quote ,(apply f (field-function x) args))])))))
 
-;; from rackjure
+;; not actually atomic--box-cas! doesn't work on impersonated boxes,
+;; and we have a semaphore around handlers anyway.
 (define (swap! box f . args)
-  (let [(old-value (unbox box))]
-    (box-cas! box old-value (apply f old-value args))))
+  (set-box! box (apply f (unbox box) args)))
 
 (define (hash-update h k f . args)
   (let ([old-value (hash-ref h k #f)])
