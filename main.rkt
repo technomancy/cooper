@@ -184,8 +184,46 @@
   (> double-click-threshold (- (hash-ref mouse 'at)
                                (hash-ref last-mouse 'at 0))))
 
+(define (button-editor-frame% sem)
+  (class frame%
+    (super-new)
+    (define (on-close)
+      (semaphore-post sem))
+    (augment on-close)))
+
+(define (button-edit-window button)
+  (let* ([sem (make-semaphore 0)]
+         [editor (new text%)]
+         ;; TODO: turn read forms back into string
+         [snip (make-object string-snip% (button-action button))]
+         [frame (new (button-editor-frame% sem) [label "Button Edit"]
+                     [width 500] [height 500])]
+         [canvas (new editor-canvas% [parent frame])]
+         [mb (new menu-bar% [parent frame])]
+         [m-edit (new menu% [label "Edit"] [parent mb])])
+    (append-editor-operation-menu-items m-edit #t)
+    (send canvas set-editor editor)
+    ;; TODO: this does nothing
+    (send editor change-style (make-object style-delta% 'change-family 'modern)
+          'start 'end)
+    ;; TODO: visible/name
+    ;; TODO: add ok/cancel buttons
+    ;; TODO: add select menu for existing cards
+    (send frame show #t)
+    (send editor insert snip)
+    (define (blocker) ; probably a better way to do this
+      (when (not (semaphore-try-wait? sem))
+        (sleep/yield 0.1)
+        (blocker)))
+    (blocker)
+    (send editor get-flattened-text)))
+
 (define (button-edit state target-button)
-  (let* ([action (get-text-from-user "card" "Card: ")]
+  (let* ([input (button-edit-window target-button)]
+         [action (if (hash-ref (stack-cards (state-stack state)) input #f)
+                     input
+                     ;; TODO: check for readable input here
+                     (read-string input))]
          [new-button (update target-button 'action (lambda (_) action))])
     (update state 'stack update 'cards
             hash-update (state-card state) update 'buttons
