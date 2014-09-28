@@ -2,6 +2,10 @@
 
 (require "cooper.rkt" "explore.rkt" "buttons.rkt" "draw.rkt")
 
+(define modes `#hash(("explore" . ,explore-mode)
+                     ("buttons" . ,buttons-mode)
+                     ("draw" . ,draw-mode)))
+
 
 ;;; imperative bits
 
@@ -174,14 +178,9 @@
 
 ;;; loading
 
-(define (stack-filename->name filename)
-  (first (string-split (path->string (file-name-from-path filename)) ".")))
-
 (define (main [filename #f] . args)
-  (let* ([stack (if (and filename (file-exists? filename))
-                    (call-with-input-file filename read)
-                    (stack (or filename "new") (hash "zero" card-zero
-                                                     "one" card-one) 800 600))]
+  (let* ([stack (stack "new" (hash "zero" card-zero
+                                                 "one" card-one) 800 600)]
          [now (box (zero-enter (state "zero" stack (hash-ref modes "explore")
                                       (hash) (hash))))]
          [frame (new frame% [label (stack-name stack)]
@@ -190,12 +189,3 @@
                       [paint-callback (curry paint now)])])
     (send frame show #t)
     now))
-
-(define modes `#hash(("explore" . ,explore-mode)
-                     ("buttons" . ,buttons-mode)
-                     ("draw" . ,draw-mode)))
-
-(module+ main
-  (main))
-;; for quick testing
-;; (main "mystack.rkt")
