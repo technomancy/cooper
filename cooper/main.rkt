@@ -21,6 +21,7 @@
                (when filename
                  (call-with-output-file filename
                    (curry write (state-stack (unbox now))))))]
+      ;; TODO: can't load as your first command
       [(#\l) (let ([filename (get-file "Load:")])
                (when filename
                  (swap! now update 'stack
@@ -40,28 +41,28 @@
 
 (define (handle-mouse now canvas event)
   (case (send event get-event-type)
-    ;; TODO: clauses should begin with a list, not quote
-    ['left-down
+    [(left-down)
      (swap! now update 'mouse hash-set 'down event)
      (swap! now update 'mouse hash-set 'last event)
      (swap! now update 'mouse hash-set 'at (current-milliseconds))
      (let ([onclick (mode-onclick (state-mode (unbox now)))])
        (and onclick (swap! now onclick canvas event))
        (send canvas refresh))]
-    ['left-up
+    [(left-up)
      (let ([mouse (state-mouse (unbox now))]
            [onrelease (mode-onrelease (state-mode (unbox now)))])
        (swap! now update 'mouse (lambda (_) (hash)))
        (swap! now update 'last-mouse (lambda (_) mouse))
        (and onrelease (swap! now onrelease canvas event mouse))
        (send canvas refresh))]
-    ['motion
+    [(motion)
      (let ([onmove (mode-onmove (state-mode (unbox now)))])
        (and onmove (swap! now onmove canvas event))
        (swap! now update 'mouse hash-set 'last event))]
-    ['right-down (swap! now update 'mode next-mode)
-                 (swap! now update 'mouse (lambda (_) (hash)))
-                 (send canvas refresh)]))
+    [(right-down)
+     (swap! now update 'mode next-mode)
+     (swap! now update 'mouse (lambda (_) (hash)))
+     (send canvas refresh)]))
 
 (define motion-drop-threshold 100)
 (define last-motion (box 0))
@@ -189,3 +190,5 @@
                       [paint-callback (curry paint now)])])
     (send frame show #t)
     now))
+
+;; TODO: module+ main once we switch to fstructs
