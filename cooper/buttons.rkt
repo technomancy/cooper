@@ -53,8 +53,10 @@
     (send editor get-flattened-text)))
 
 (define (button-edit state target-button)
-  (let* ([input (button-edit-window target-button)]
-         [action (if (hash-ref (stack-cards (state-stack state)) input #f)
+  (let* ([input (get-text-from-user "card" "card")
+                ;; (button-edit-window target-button)
+                ]
+         [action (if #t ;(hash-ref (stack-cards (state-stack state)) input #f)
                      input
                      ;; TODO: check for readable input here
                      (read (open-input-string input)))]

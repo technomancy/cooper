@@ -29,8 +29,9 @@
       [(#\b) (swap! now update 'stack update 'cards
                     hash-update (state-card (unbox now))
                     update 'buttons (lambda (_) '()))]
-      ;; TODO: need zero-enter here
-      [(#\0) (swap! now update 'card (lambda (_) "zero"))])
+      [(#\0)
+       (swap! now update 'card (lambda (_) "zero"))
+       (swap! now zero-enter)])
     (send canvas refresh)))
 
 (define (handle-mouse now canvas event)
