@@ -200,12 +200,11 @@
                      [width 500] [height 500])]
          [canvas (new editor-canvas% [parent frame])]
          [mb (new menu-bar% [parent frame])]
-         [m-edit (new menu% [label "Edit"] [parent mb])])
+         [m-edit (new menu% [label "Edit"] [parent mb])]
+         [style (make-object style-delta% 'change-family 'modern)])
+    (send editor change-style style 'start 'end)
     (append-editor-operation-menu-items m-edit #t)
     (send canvas set-editor editor)
-    ;; TODO: this does nothing
-    (send editor change-style (make-object style-delta% 'change-family 'modern)
-          'start 'end)
     ;; TODO: visible/name
     ;; TODO: add ok/cancel buttons
     ;; TODO: add select menu for existing cards
@@ -223,7 +222,7 @@
          [action (if (hash-ref (stack-cards (state-stack state)) input #f)
                      input
                      ;; TODO: check for readable input here
-                     (read-string input))]
+                     (read (open-input-string input)))]
          [new-button (update target-button 'action (lambda (_) action))])
     (update state 'stack update 'cards
             hash-update (state-card state) update 'buttons
