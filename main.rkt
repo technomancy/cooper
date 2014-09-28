@@ -235,7 +235,7 @@
     (if target-button
         (let ([state (update state 'mouse hash-set 'target-button target-button)])
           (if (double-click? (state-mouse state) (state-last-mouse state))
-              (button-edit state target-button)
+              (update (button-edit state target-button) 'mouse (lambda (_) (hash)))
               state))
         state)))
 
