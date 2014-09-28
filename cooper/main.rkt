@@ -59,6 +59,17 @@
                  (swap! now update 'mouse (lambda (_) (hash)))
                  (send canvas refresh)]))
 
+(define motion-drop-threshold 100)
+(define last-motion (box 0))
+
+;; kind of a terrible hack
+(define (drop-motion? event)
+  (if (< (- (send event get-time-stamp)
+            (unbox last-motion)) motion-drop-threshold)
+      #t
+      (begin (set-box! last-motion (send event get-time-stamp))
+             #f)))
+
 (define (card-canvas% now semaphore)
   (class canvas%
     (when (unbox debug)
@@ -67,8 +78,10 @@
       (call-with-semaphore semaphore handle-key
                            (lambda () #f) now this event))
     (define/override (on-event event)
-      (call-with-semaphore semaphore handle-mouse
-                           (lambda () #f) now this event))
+      (when (or (not (equal? 'motion (send event get-event-type)))
+                (not (drop-motion? event)))
+        (call-with-semaphore semaphore handle-mouse
+                             (lambda () #f) now this event)))
     (super-new)))
 
 (define (mode-border mode dc canvas)
