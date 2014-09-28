@@ -107,23 +107,38 @@
 (define (zero-delete-card card state)
   (zero-enter (update state 'stack update 'cards hash-remove (card-name card))))
 
+(define (zero-copy-card card state)
+  (let* ([new-card (update card 'name string-append " copy")])
+    (zero-enter (update state 'stack update 'cards hash-set
+                        (card-name new-card) new-card))))
+
 (define (zero-place-delete-button card i buttons)
-  (cons (button (list (+ 220 zero-button-x-offset)
+  (cons (button (list (+ 215 zero-button-x-offset)
                       (* zero-button-y-offset (add1 i))
                       (+ 240 zero-button-x-offset)
                       (- (* zero-button-y-offset (+ 2 i)) 5))
                 `(lambda (state) (zero-delete-card ,card state)) #t "x")
         buttons))
 
+(define (zero-place-copy-button card i buttons)
+  (cons (button (list (+ 260 zero-button-x-offset)
+                      (* zero-button-y-offset (add1 i))
+                      (+ 285 zero-button-x-offset)
+                      (- (* zero-button-y-offset (+ 2 i)) 5))
+                `(lambda (state) (zero-copy-card ,card state)) #t "+")
+        buttons))
+
 (define (zero-buttons stack card)
-  (let ([jump-buttons (foldl zero-place-button '()
+  (let* ([buttons (foldl zero-place-button '()
                              (hash-values (stack-cards stack))
                              (range (hash-count (stack-cards stack))))]
-        [delete-buttons (foldl zero-place-delete-button '()
+        [buttons (foldl zero-place-delete-button buttons
                                (hash-values (stack-cards stack))
-                               (range (hash-count (stack-cards stack))))])
-    (update card 'buttons (lambda (_) (append (list zero-new-card-button)
-                                              jump-buttons delete-buttons)))))
+                               (range (hash-count (stack-cards stack))))]
+        [buttons (foldl zero-place-copy-button buttons
+                             (hash-values (stack-cards stack))
+                             (range (hash-count (stack-cards stack))))])
+    (update card 'buttons (lambda (_) (cons zero-new-card-button buttons)))))
 
 (define (zero-enter state)
   (update state 'stack update 'cards hash-update (state-card state)
