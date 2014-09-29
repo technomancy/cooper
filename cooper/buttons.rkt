@@ -81,21 +81,21 @@
                                           (hash-ref mouse 'last))])
         (update state 'stack
                 update 'cards hash-update (state-card state)
-                update 'buttons (flip cons) (button corners "" #f #f)))
+                update 'buttons (flip cons) (button corners "" #f)))
       state))
 
 (define (render-button button dc render-invisible?)
-  (if (button-visible? button)
+  (if (button-name button)
       (send dc set-pen "black" 1 'solid)
       (send dc set-pen "black" 1 'long-dash))
   (match (button-corners button)
     [(list left top right bottom)
-     (when (or render-invisible? (button-visible? button))
+     (when (or render-invisible? (button-name button))
        (send dc draw-rectangle
              (min left right) (min top bottom)
              (- (max left right) (min left right))
              (- (max top bottom) (min top bottom))))
-     (when (and (button-visible? button) (button-name button))
+     (when (button-name button)
        (send dc draw-text (button-name button) (+ 6 left) (+ 3 top)))]))
 
 (define (paint state dc canvas)
@@ -109,7 +109,7 @@
     (when (and down last (not (dict-ref (state-mouse state) 'target-button #f)))
       (render-button (button (list (send down get-x) (send down get-y)
                                    (send last get-x) (send last get-y))
-                             "" #f #f) dc #t))))
+                             "" #f) dc #t))))
 
 (define button-resize-threshold 10)
 

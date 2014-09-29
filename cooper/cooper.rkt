@@ -13,7 +13,7 @@
 
 (struct card (name background buttons events) #:prefab)
 
-(struct button (corners action visible? name) #:prefab)
+(struct button (corners action name) #:prefab)
 
 (struct stack (name cards width height) #:prefab)
 

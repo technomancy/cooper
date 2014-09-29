@@ -121,7 +121,7 @@
   (cons (button (list zero-button-x-offset (* zero-button-y-offset (add1 i))
                       ;; TODO: 200 is nonsense here
                       200 (- (* zero-button-y-offset (+ 2 i)) 5))
-                (card-name card) #t (card-name card))
+                (card-name card) (card-name card))
         buttons))
 
 (define (zero-delete-card card state)
@@ -137,7 +137,7 @@
                       (* zero-button-y-offset (add1 i))
                       (+ 240 zero-button-x-offset)
                       (- (* zero-button-y-offset (+ 2 i)) 5))
-                `(lambda (state) (zero-delete-card ,card state)) #t "x")
+                `(lambda (state) (zero-delete-card ,card state)) "x")
         buttons))
 
 (define (zero-place-copy-button card i buttons)
@@ -145,7 +145,7 @@
                       (* zero-button-y-offset (add1 i))
                       (+ 285 zero-button-x-offset)
                       (- (* zero-button-y-offset (+ 2 i)) 5))
-                `(lambda (state) (zero-copy-card ,card state)) #t "+")
+                `(lambda (state) (zero-copy-card ,card state)) "+")
         buttons))
 
 (define (zero-buttons stack card)
@@ -172,7 +172,7 @@
                             (card card-name '() '() (hash))))
         state)))
 
-(define zero-new-card-button (button '(0 0 25 30) 'zero-new-card #t "+"))
+(define zero-new-card-button (button '(0 0 25 30) 'zero-new-card "+"))
 
 (define card-zero (card "zero" '() '() (hash "enter" 'zero-enter)))
 
