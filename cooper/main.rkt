@@ -86,7 +86,9 @@
       (when (or (not (equal? 'motion (send event get-event-type)))
                 (not (drop-motion? event)))
         (call-with-semaphore semaphore handle-mouse
-                             (lambda () #f) now this event)))
+                             (lambda () #f) now this event)
+        (send (send this get-parent) set-label
+              (string-append "Cooper: " (state-card (unbox now))))))
     (super-new)))
 
 (define (mode-border mode dc canvas)
@@ -184,7 +186,7 @@
                                                  "one" card-one) 800 600)]
          [now (box (zero-enter (state "zero" stack (hash-ref modes "explore")
                                       (hash) (hash))))]
-         [frame (new frame% [label (stack-name stack)]
+         [frame (new frame% [label "Cooper"]
                      [width (stack-width stack)] [height (stack-height stack)])]
          [canvas (new (card-canvas% now (make-semaphore 1)) [parent frame]
                       [paint-callback (curry paint now)])])
