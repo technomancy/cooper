@@ -19,18 +19,17 @@
             (let ([action (if (string? (button-action button))
                               (lambda (state)
                                 (update state 'card (lambda (_) (button-action button))))
-                              (eval (button-action button)))])
-              (if (or (and (string? (button-action button))
-                           (hash-ref (stack-cards (state-stack state))
-                                     (button-action button) #f))
-                      (procedure? (button-action button)))
-                  (activate-button state action)
+                              (button-action button))])
+              (if (and (string? (button-action button))
+                       (not (hash-ref (stack-cards (state-stack state))
+                                      (button-action button) #f)))
                   (if (equal? (message-box "new card?"
                                            (format "Unknown card ~s; create it?"
                                                    (button-action button))
                                            #f '[ok-cancel])'ok)
                       (create-unknown-card state button)
-                      state)))
+                      state)
+                  (activate-button state action)))
             #f)) state))
 
 (define explore-mode
