@@ -20,10 +20,10 @@
                               (lambda (state)
                                 (update state 'card (lambda (_) (button-action button))))
                               (eval (button-action button)))])
-              (if (or (and (string? action)
+              (if (or (and (string? (button-action button))
                            (hash-ref (stack-cards (state-stack state))
                                      (button-action button) #f))
-                      (procedure? action))
+                      (procedure? (button-action button)))
                   (activate-button state action)
                   (if (equal? (message-box "new card?"
                                            (format "Unknown card ~s; create it?"
