@@ -19,21 +19,43 @@
   (> double-click-threshold (- (hash-ref mouse 'at)
                                (hash-ref last-mouse 'at 0))))
 
-(define (button-editor-frame% sem)
+(define (editor-frame% sem)
   (class frame%
     (super-new)
     (define (on-close)
       (semaphore-post sem))
     (augment on-close)))
 
-(define (button-edit-window button)
+(define (button-callback frame success? ok? _button _event)
+  (set-box! success? ok?)
+  (send frame on-close)
+  (send frame show #f))
+
+(define (choices-callback editor choice _event)
+  (let ([selection (send choice get-string-selection)])
+    (when (not (equal? "" selection))
+      (send editor erase)
+      (send editor insert (make-object string-snip% selection)))))
+
+(define (edit-window button stack)
   (let* ([sem (make-semaphore 0)]
+         [success? (box #f)]
          [editor (new text%)]
-         ;; TODO: turn read forms back into string
-         [snip (make-object string-snip% (button-action button))]
-         [frame (new (button-editor-frame% sem) [label "Button Edit"]
+         [snip (make-object string-snip% (if (string? (button-action button))
+                                             (button-action button)
+                                             (~s (button-action button))))]
+         [frame (new (editor-frame% sem) [label "Button Edit"]
                      [width 500] [height 500])]
-         [canvas (new editor-canvas% [parent frame])]
+         [vpane (new vertical-pane% [parent frame])]
+         [canvas (new editor-canvas% [parent vpane])]
+         [hpane (new horizontal-pane% [parent frame])]
+         [choices (new choice% [parent hpane] [label "Card:"]
+                       [choices (cons "" (hash-keys (stack-cards stack)))]
+                       [callback (curry choices-callback editor)])]
+         [cancel (new button% [label "Cancel"] [parent hpane]
+                      [callback (curry button-callback frame success? #f)])]
+         [ok (new button% [label "OK"] [parent hpane]
+                  [callback (curry button-callback frame success? #t)])]
          [mb (new menu-bar% [parent frame])]
          [m-edit (new menu% [label "Edit"] [parent mb])]
          [style (make-object style-delta% 'change-family 'modern)])
@@ -41,8 +63,6 @@
     (append-editor-operation-menu-items m-edit #t)
     (send canvas set-editor editor)
     ;; TODO: visible/name
-    ;; TODO: add ok/cancel buttons
-    ;; TODO: add select menu for existing cards
     (send frame show #t)
     (send editor insert snip)
     (define (blocker) ; probably a better way to do this
@@ -50,12 +70,13 @@
         (sleep/yield 0.1)
         (blocker)))
     (blocker)
-    (send editor get-flattened-text)))
+    (if (unbox success?)
+        (send editor get-flattened-text)
+        (button-action button))))
 
 (define (button-edit state target-button)
-  (let* ([input (get-text-from-user "card" "card")
-                ;; (button-edit-window target-button)
-                ]
+  ;; (get-text-from-user "card" "card")
+  (let* ([input (edit-window target-button (state-stack state))]
          [action (if #t ;(hash-ref (stack-cards (state-stack state)) input #f)
                      input
                      ;; TODO: check for readable input here
@@ -111,24 +132,24 @@
                                    (send last get-x) (send last get-y))
                              "" #f) dc #t))))
 
-(define button-resize-threshold 10)
+(define resize-threshold 10)
 
-(define (button-corner-deltas corners click-x click-y dx dy)
+(define (corner-deltas corners click-x click-y dx dy)
   ;; very repetitive, room for improvement here
-  (list (if (> (- (third corners) click-x) button-resize-threshold) dx 0)
-        (if (> (- (fourth corners) click-y) button-resize-threshold) dy 0)
-        (if (> (- click-x (first corners)) button-resize-threshold) dx 0)
-        (if (> (- click-y (second corners)) button-resize-threshold) dy 0)))
+  (list (if (> (- (third corners) click-x) resize-threshold) dx 0)
+        (if (> (- (fourth corners) click-y) resize-threshold) dy 0)
+        (if (> (- click-x (first corners)) resize-threshold) dx 0)
+        (if (> (- click-y (second corners)) resize-threshold) dy 0)))
 
 (define (button-new-corners old-corners last-mouse new-mouse)
   (let* ([start-x (send last-mouse get-x)]
          [start-y (send last-mouse get-y)]
          [delta-x (- (send new-mouse get-x) start-x)]
          [delta-y (- (send new-mouse get-y) start-y)])
-    (map + (button-corner-deltas old-corners start-x start-y
-                                 delta-x delta-y) old-corners)))
+    (map + (corner-deltas old-corners start-x start-y
+                          delta-x delta-y) old-corners)))
 
-(define (button-drag target event state)
+(define (drag target event state)
   (let* ([card-name (state-card state)]
          [last-mouse (hash-ref (state-mouse state) 'last)]
          [new-button (update target 'corners button-new-corners last-mouse event)]
@@ -143,7 +164,7 @@
   (if (dict-ref (state-mouse state) 'down #f)
       (let* ([target-button (dict-ref (state-mouse state) 'target-button #f)]
              [state (if target-button
-                        (button-drag target-button event state)
+                        (drag target-button event state)
                         state)])
         (send canvas refresh)
         state)
