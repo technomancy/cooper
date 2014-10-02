@@ -81,18 +81,17 @@
                      input
                      ;; TODO: check for readable input here
                      (read (open-input-string input)))]
-         [new-button (update target-button 'action (lambda (_) action))])
-    (update state 'stack update 'cards
-            hash-update (state-card state) update 'buttons
-            replace target-button new-button)))
+         [new-button (target-button 'action (lambda (_) action))])
+    (state '(stack cards) hash-update (state-card state)
+           (λ (card) (card 'buttons replace target-button new-button)))))
 
 (define (click state canvas event)
   (let ([target-button (findf (curry button-hit? event)
                               (card-buttons (current-card state)))])
     (if target-button
-        (let ([state (update state 'mouse hash-set 'target-button target-button)])
+        (let ([state (state 'mouse hash-set 'target-button target-button)])
           (if (double-click? (state-mouse state) (state-last-mouse state))
-              (update (button-edit state target-button) 'mouse (lambda (_) (hash)))
+              ((button-edit state target-button) 'mouse (lambda (_) (hash)))
               state))
         state)))
 
@@ -100,9 +99,8 @@
   (if (not (hash-ref mouse 'target-button #f))
       (let ([corners (make-button-corners (hash-ref mouse 'down)
                                           (hash-ref mouse 'last))])
-        (update state 'stack
-                update 'cards hash-update (state-card state)
-                update 'buttons (flip cons) (button corners "" #f)))
+        (state '(stack cards) hash-update (state-card state)
+               update 'buttons (flip cons) (button corners "" #f)))
       state))
 
 (define (render-button button dc render-invisible?)
@@ -152,13 +150,13 @@
 (define (drag target event state)
   (let* ([card-name (state-card state)]
          [last-mouse (hash-ref (state-mouse state) 'last)]
-         [new-button (update target 'corners button-new-corners last-mouse event)]
-         [state (update state 'mouse hash-set 'target-button new-button)]
-         [state (update state 'mouse hash-set 'target-start-xy
-                        (list (send event get-x) (send event get-y)))])
-    (update state 'stack update 'cards
-            hash-update card-name update 'buttons
-            replace target new-button)))
+         [new-button (target 'corners button-new-corners last-mouse event)]
+         [state (state 'mouse hash-set 'target-button new-button)]
+         [state (state 'mouse hash-set 'target-start-xy
+                       (list (send event get-x) (send event get-y)))])
+    (state '(stack cards)
+           hash-update card-name update 'buttons
+           replace target new-button)))
 
 (define (move state canvas event)
   (if (dict-ref (state-mouse state) 'down #f)

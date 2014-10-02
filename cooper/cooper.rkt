@@ -1,26 +1,27 @@
 #lang racket/gui
 
+(require "fstruct.rkt")
+
 (provide (struct-out card)
          (struct-out button)
          (struct-out stack)
          (struct-out state)
          (struct-out mode)
-         current-card update swap! hash-update flip replace
+         current-card swap! update! update hash-update flip replace
          button-hit?)
 
 
 ;;; types
 
-(struct card (name background buttons events) #:prefab)
+(fstruct card (name background buttons events))
 
-(struct button (corners action name) #:prefab)
+(fstruct button (corners action name))
 
-(struct stack (name cards width height) #:prefab)
+(fstruct stack (name cards width height))
 
-(struct state (card stack mode mouse last-mouse) #:prefab)
+(fstruct state (card stack mode mouse last-mouse))
 
-(struct mode (name color submodes onclick onrelease onmove paint next)
-        #:prefab)
+(fstruct mode (name color submodes onclick onrelease onmove paint next))
 
 (define (current-card state)
   (hash-ref (stack-cards (state-stack state)) (state-card state)))
@@ -28,18 +29,16 @@
 
 ;;; general helpers
 
-;; TODO: use functional struct macro
-(define (update x field f . args)
-  (let-values ([(type _) (struct-info x)])
-    (let* ([function-name (format "~s-~s" (object-name type) field)]
-           [field-function (eval (string->symbol function-name))])
-      (eval (list 'struct-copy (object-name type) x
-                  [list field `(quote ,(apply f (field-function x) args))])))))
-
-;; not actually atomic--box-cas! doesn't work on impersonated boxes,
-;; and we have a semaphore around handlers anyway.
 (define (swap! box f . args)
   (set-box! box (apply f (unbox box) args)))
+
+;; For boxed fstructs
+(define (update! box . args)
+  (set-box! box (apply (unbox box) args)))
+
+;; TODO: could we get rid of this if fstruct supported dict-update?
+(define (update f . args)
+  (apply f args))
 
 (define (hash-update h k f . args)
   (let ([old-value (hash-ref h k #f)])

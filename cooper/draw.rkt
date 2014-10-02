@@ -6,8 +6,7 @@
 
 (define (release state canvas event mouse)
   (let ([down (hash-ref mouse 'down)])
-    (update state 'stack
-            update 'cards hash-update (state-card state)
+    (state '(stack cards) hash-update (state-card state)
             update 'background (flip cons) (list 'draw-line
                                                  (send down get-x)
                                                  (send down get-y)

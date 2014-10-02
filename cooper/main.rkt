@@ -24,44 +24,45 @@
       ;; TODO: can't load as your first command
       [(#\l) (let ([filename (get-file "Load:")])
                (when filename
-                 (swap! now update 'stack
-                        (lambda (_) (call-with-input-file filename read)))
+                 ;; TODO: fix to work with transparent structs
+                 (update! now 'stack
+                          (lambda (_) (call-with-input-file filename read)))
                  ;; TODO: not all stacks have a zero card?
-                 (swap! now update 'card (lambda (_) "zero"))))]
-      [(#\c) (swap! now update 'stack update 'cards
-                    hash-update (state-card (unbox now))
-                    update 'background (lambda (_) '()))]
-      [(#\b) (swap! now update 'stack update 'cards
-                    hash-update (state-card (unbox now))
-                    update 'buttons (lambda (_) '()))]
+                 (update! now 'card (lambda (_) "zero"))))]
+      [(#\c) (update! now '(stack cards)
+                      hash-update (state-card (unbox now))
+                      (λ (card) (card 'background '())))]
+      [(#\b) (update! now '(stack cards)
+                      hash-update (state-card (unbox now))
+                      (λ (card) (card 'buttons '())))]
       [(#\0)
-       (swap! now update 'card (lambda (_) "zero"))
+       (update! now 'card (lambda _ "zero"))
        (swap! now zero-enter)])
     (send canvas refresh)))
 
 (define (handle-mouse now canvas event)
   (case (send event get-event-type)
     [(left-down)
-     (swap! now update 'mouse hash-set 'down event)
-     (swap! now update 'mouse hash-set 'last event)
-     (swap! now update 'mouse hash-set 'at (current-milliseconds))
+     (update! now 'mouse hash-set 'down event)
+     (update! now 'mouse hash-set 'last event)
+     (update! now 'mouse hash-set 'at (current-milliseconds))
      (let ([onclick (mode-onclick (state-mode (unbox now)))])
        (and onclick (swap! now onclick canvas event))
        (send canvas refresh))]
     [(left-up)
      (let ([mouse (state-mouse (unbox now))]
            [onrelease (mode-onrelease (state-mode (unbox now)))])
-       (swap! now update 'mouse (lambda (_) (hash)))
-       (swap! now update 'last-mouse (lambda (_) mouse))
+       (update! now 'mouse (lambda (_) (hash)))
+       (update! now 'last-mouse (lambda (_) mouse))
        (and onrelease (swap! now onrelease canvas event mouse))
        (send canvas refresh))]
     [(motion)
      (let ([onmove (mode-onmove (state-mode (unbox now)))])
        (and onmove (swap! now onmove canvas event))
-       (swap! now update 'mouse hash-set 'last event))]
+       (update! now 'mouse hash-set 'last event))]
     [(right-down)
-     (swap! now update 'mode next-mode)
-     (swap! now update 'mouse (lambda (_) (hash)))
+     (update! now 'mode next-mode)
+     (update! now 'mouse (lambda (_) (hash)))
      (send canvas refresh)]))
 
 (define motion-drop-threshold 100)
@@ -125,12 +126,11 @@
         buttons))
 
 (define (zero-delete-card card state)
-  (zero-enter (update state 'stack update 'cards hash-remove (card-name card))))
+  (zero-enter (state '(stack cards) hash-remove (card-name card))))
 
 (define (zero-copy-card card state)
-  (let* ([new-card (update card 'name string-append " copy")])
-    (zero-enter (update state 'stack update 'cards hash-set
-                        (card-name new-card) new-card))))
+  (let* ([new-card (card 'name string-append " copy")])
+    (zero-enter (state '(stack cards) hash-set (card-name new-card) new-card))))
 
 (define (zero-place-delete-button card i buttons)
   (cons (button (list (+ 215 zero-button-x-offset)
@@ -150,26 +150,26 @@
 
 (define (zero-buttons stack card)
   (let* ([buttons (foldl zero-place-button '()
-                             (hash-values (stack-cards stack))
-                             (range (hash-count (stack-cards stack))))]
-        [buttons (foldl zero-place-delete-button buttons
-                               (hash-values (stack-cards stack))
-                               (range (hash-count (stack-cards stack))))]
-        [buttons (foldl zero-place-copy-button buttons
-                             (hash-values (stack-cards stack))
-                             (range (hash-count (stack-cards stack))))])
-    (update card 'buttons (lambda (_) (cons zero-new-card-button buttons)))))
+                         (hash-values (stack-cards stack))
+                         (range (hash-count (stack-cards stack))))]
+         [buttons (foldl zero-place-delete-button buttons
+                         (hash-values (stack-cards stack))
+                         (range (hash-count (stack-cards stack))))]
+         [buttons (foldl zero-place-copy-button buttons
+                         (hash-values (stack-cards stack))
+                         (range (hash-count (stack-cards stack))))])
+    (card '(buttons) (lambda (_) (cons zero-new-card-button buttons)))))
 
 (define (zero-enter state)
-  (update state 'stack update 'cards hash-update (state-card state)
+  (state '(stack cards) hash-update (state-card state)
           (curry zero-buttons (state-stack state))))
 
 (define (zero-new-card state)
   (let ([card-name (get-text-from-user "card" "New card name:")])
     (if card-name
-        (zero-enter (update state 'stack
-                            update 'cards hash-set card-name
-                            (card card-name '() '() (hash))))
+        (zero-enter (state '(stack cards)
+                           hash-set card-name
+                           (card card-name '() '() (hash))))
         state)))
 
 (define zero-new-card-button (button '(0 0 25 30) 'zero-new-card "+"))
@@ -181,9 +181,8 @@
 
 ;;; loading
 
-(define (main [filename #f] . args)
-  (let* ([stack (stack "new" (hash "zero" card-zero
-                                                 "one" card-one) 800 600)]
+(define (main)
+  (let* ([stack (stack "new" (hash "zero" card-zero "one" card-one) 800 600)]
          [now (box (zero-enter (state "zero" stack (hash-ref modes "explore")
                                       (hash) (hash))))]
          [frame (new frame% [label "Cooper"]
