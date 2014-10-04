@@ -2,7 +2,7 @@
 
 <img src="http://p.hagelb.org/cooper.jpg" />
 
-A primitive HyperCard clone, sort of.
+A primitive [HyperCard](http://www.loper-os.org/?p=568) clone, sort of.
 
 ## Modes
 

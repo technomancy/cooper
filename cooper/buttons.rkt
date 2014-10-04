@@ -25,20 +25,36 @@
       (send editor erase)
       (send editor insert (make-object string-snip% selection)))))
 
+(define (blocker sem)
+  (when (not (semaphore-try-wait? sem))
+    (sleep/yield 0.1)
+    (blocker sem)))
+
 (define (edit-window button stack)
   (let* ([sem (make-semaphore 0)]
          [success? (box #f)]
          [editor (new text%)]
-         [snip (make-object string-snip% (if (string? (button-action button))
-                                             (button-action button)
-                                             (~s (button-action button))))]
+         [snip (make-object string-snip% (cond [(string? (button-action button))
+                                                (button-action button)]
+                                               [(not (button-action button)) ""]
+                                               [else (~s (button-action button))]))]
          [frame (new (editor-frame% sem) [label "Button Edit"]
                      [width 500] [height 500])]
          [vpane (new vertical-pane% [parent frame])]
-         [canvas (new editor-canvas% [parent vpane])]
-         [hpane (new horizontal-pane% [parent frame])]
+         [canvas (new (class editor-canvas%
+                        (define/override (on-char event)
+                          (cond [(equal? 'escape (send event get-key-code))
+                                 (button-callback frame success? false '() '())]
+                                [(and (equal? #\return (send event get-key-code))
+                                      (send event get-control-down))
+                                 (button-callback frame success? true '() '())]
+                                [else (super on-char event)]))
+                        (super-new))
+                      [parent vpane])]
+         [hpane (new horizontal-pane% [parent frame]
+                     [stretchable-height false])]
          [choices (new choice% [parent hpane] [label "Card:"]
-                       [choices (cons "" (hash-keys (stack-cards stack)))]
+                       [choices (cons "" (dict-keys (stack-cards stack)))]
                        [callback (curry choices-callback editor)])]
          [cancel (new button% [label "Cancel"] [parent hpane]
                       [callback (curry button-callback frame success? #f)])]
@@ -53,70 +69,69 @@
     ;; TODO: visible/name
     (send frame show #t)
     (send editor insert snip)
-    (define (blocker) ; probably a better way to do this
-      (when (not (semaphore-try-wait? sem))
-        (sleep/yield 0.1)
-        (blocker)))
-    (blocker)
+    (blocker sem) ; probably a better way to do this
     (if (unbox success?)
         (send editor get-flattened-text)
         (button-action button))))
 
+(define (try-code-action input)
+  (with-handlers ([exn:fail? (lambda (exn)
+                               (message-box "Problem with code"
+                                            (exn-message exn)
+                                            false '(ok stop))
+                               false)])
+    (let* ([forms (read (open-input-string input))]
+           [code (eval forms)])
+      (if (procedure? code)
+          code
+          (error "needs to be a procedure")))))
+
 (define (button-edit state target-button)
-  ;; (get-text-from-user "card" "card")
   (let* ([input (edit-window target-button (state-stack state))]
-         [action (if #t ;(hash-ref (stack-cards (state-stack state)) input #f)
-                     input
-                     ;; TODO: check for readable input here
-                     (read (open-input-string input)))]
-         [new-button (target-button 'action (lambda (_) action))])
-    (state '(stack cards) hash-update (state-card state)
-           (λ (card) (card 'buttons replace target-button new-button)))))
+         ;; assume input containing space is code
+         ;; TODO: can we tell between function names and unknown card names?
+         [action (if (regexp-match #rx" " input)
+                     (try-code-action input)
+                     input)]
+         [new-button (target-button 'action action)])
+    (dict-update-in state `(stack cards ,(state-card state))
+                    (λ (card)
+                      (dict-update card 'buttons
+                                   (curryr replace target-button new-button))))))
+
+
+;;; click handlers
+
+(define double-click-threshold 500)
+
+(define (double-click? mouse last-mouse)
+  (> double-click-threshold (- (dict-ref mouse 'at)
+                               (dict-ref last-mouse 'at 0))))
 
 (define (click state canvas event)
   (let ([target-button (findf (curry button-hit? event)
                               (card-buttons (current-card state)))])
     (if target-button
-        (let ([state (state 'mouse hash-set 'target-button target-button)])
+        (let ([state (dict-update state 'mouse (curryr dict-set 'target-button
+                                                       target-button))])
           (if (double-click? (state-mouse state) (state-last-mouse state))
-              ((button-edit state target-button) 'mouse (lambda (_) (hash)))
+              ((button-edit state target-button) 'mouse (hash))
               state))
         state)))
 
+(define (make-button-corners down-event up-event)
+  (list (min (send down-event get-x) (send up-event get-x))
+        (min (send down-event get-y) (send up-event get-y))
+        (max (send down-event get-x) (send up-event get-x))
+        (max (send down-event get-y) (send up-event get-y))))
+
 (define (release state canvas event mouse)
-  (if (not (hash-ref mouse 'target-button #f))
-      (let ([corners (make-button-corners (hash-ref mouse 'down)
-                                          (hash-ref mouse 'last))])
-        (state '(stack cards) hash-update (state-card state)
-               update 'buttons (flip cons) (button corners "" #f)))
+  (if (not (dict-ref mouse 'target-button #f))
+      (let ([corners (make-button-corners (dict-ref mouse 'down)
+                                          (dict-ref mouse 'last))])
+        (dict-update-in state `(stack cards ,(state-card state) buttons)
+                        (flip cons) (button corners "" #f)))
       state))
-
-(define (render-button button dc render-invisible?)
-  (if (button-name button)
-      (send dc set-pen "black" 1 'solid)
-      (send dc set-pen "black" 1 'long-dash))
-  (match (button-corners button)
-    [(list left top right bottom)
-     (when (or render-invisible? (button-name button))
-       (send dc draw-rectangle
-             (min left right) (min top bottom)
-             (- (max left right) (min left right))
-             (- (max top bottom) (min top bottom))))
-     (when (button-name button)
-       (send dc draw-text (button-name button) (+ 6 left) (+ 3 top)))]))
-
-(define (paint state dc canvas)
-  (send dc set-brush "white" 'transparent)
-  (send dc set-smoothing 'unsmoothed)
-  (for ([button (card-buttons (current-card state))])
-    (render-button button dc #t))
-  ;; if a button is currently being created
-  (let ([down (dict-ref (state-mouse state) 'down #f)]
-        [last (dict-ref (state-mouse state) 'last #f)])
-    (when (and down last (not (dict-ref (state-mouse state) 'target-button #f)))
-      (render-button (button (list (send down get-x) (send down get-y)
-                                   (send last get-x) (send last get-y))
-                             "" #f) dc #t))))
 
 (define resize-threshold 10)
 
