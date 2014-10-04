@@ -32,10 +32,10 @@
                                  (compose deserialize read))))
                  ;; TODO: not all stacks have a zero card?
                  (update! now 'card (lambda _ "zero"))))]
-      [(#\c) (update! now `(stack cards ,(state-card (unbox now)))
-                      (λ (card) (card 'background '())))]
-      [(#\b) (update! now '(stack cards ,(state-card (unbox now)))
-                      (λ (card) (card 'buttons '())))]
+      [(#\c) (update-in! now `(stack cards ,(state-card (unbox now)) background)
+                      (λ _ '()))]
+      [(#\b) (update-in! now `(stack cards ,(state-card (unbox now)) buttons)
+                      (λ _ '()))]
       [(#\0)
        (update! now 'card (lambda _ "zero"))
        (swap! now zero-enter)])

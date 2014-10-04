@@ -156,9 +156,8 @@
          [new-button (dict-update-in target '(corners)
                                      button-new-corners last-mouse event)]
          [state (dict-update-in state '(mouse target-button) (λ _ new-button))]
-         [state (dict-update-in state '(mouse target-start-xy)
-                                (λ _
-                                  (list (send event get-x) (send event get-y))))])
+         [state (dict-update-in state '(mouse) hash-set 'target-start-xy
+                                  (list (send event get-x) (send event get-y)))])
     (dict-update-in state `(stack cards ,card-name buttons)
                     replace target new-button)))
 
