@@ -1,6 +1,7 @@
 #lang racket/gui
 
-(require "cooper.rkt" "explore.rkt" "buttons.rkt" "draw.rkt")
+(require "cooper.rkt" "explore.rkt" "buttons.rkt" "draw.rkt"
+         racket/serialize)
 
 (define modes `#hash(("explore" . ,explore-mode)
                      ("buttons" . ,buttons-mode)
@@ -19,14 +20,16 @@
     (case (send event get-key-code)
       [(#\s) (let ([filename (put-file "Save to:")])
                (when filename
+                 (when (file-exists? filename)
+                   (delete-file filename))
                  (call-with-output-file filename
-                   (curry write (state-stack (unbox now))))))]
-      ;; TODO: can't load as your first command
+                   (λ (port)
+                     (write (serialize (state-stack (unbox now))) port)))))]
       [(#\l) (let ([filename (get-file "Load:")])
                (when filename
-                 ;; TODO: fix to work with transparent structs
                  (update! now 'stack
-                          (lambda _ (call-with-input-file filename read)))
+                          (λ _ (call-with-input-file filename
+                                 (compose deserialize read))))
                  ;; TODO: not all stacks have a zero card?
                  (update! now 'card (lambda _ "zero"))))]
       [(#\c) (update! now `(stack cards ,(state-card (unbox now)))
