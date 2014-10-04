@@ -4,20 +4,8 @@
 
 (provide buttons-mode render-button)
 
-(define (make-button-corners down-event up-event)
-  (list (min (send down-event get-x) (send up-event get-x))
-        (min (send down-event get-y) (send up-event get-y))
-        (max (send down-event get-x) (send up-event get-x))
-        (max (send down-event get-y) (send up-event get-y))))
-
-(define (existing-card? state card-name)
-  (member card-name (hash-keys (stack-cards (state-stack state)))))
-
-(define double-click-threshold 500)
-
-(define (double-click? mouse last-mouse)
-  (> double-click-threshold (- (hash-ref mouse 'at)
-                               (hash-ref last-mouse 'at 0))))
+
+;;; editor
 
 (define (editor-frame% sem)
   (class frame%
@@ -149,14 +137,15 @@
 
 (define (drag target event state)
   (let* ([card-name (state-card state)]
-         [last-mouse (hash-ref (state-mouse state) 'last)]
-         [new-button (target 'corners button-new-corners last-mouse event)]
-         [state (state 'mouse hash-set 'target-button new-button)]
-         [state (state 'mouse hash-set 'target-start-xy
-                       (list (send event get-x) (send event get-y)))])
-    (state '(stack cards)
-           hash-update card-name update 'buttons
-           replace target new-button)))
+         [last-mouse (dict-ref (state-mouse state) 'last)]
+         [new-button (dict-update-in target '(corners)
+                                     button-new-corners last-mouse event)]
+         [state (dict-update-in state '(mouse target-button) (λ _ new-button))]
+         [state (dict-update-in state '(mouse target-start-xy)
+                                (λ _
+                                  (list (send event get-x) (send event get-y))))])
+    (dict-update-in state `(stack cards ,card-name buttons)
+                    replace target new-button)))
 
 (define (move state canvas event)
   (if (dict-ref (state-mouse state) 'down #f)
@@ -167,6 +156,36 @@
         (send canvas refresh)
         state)
       state))
+
+
+;;; rendering
+
+(define (render-button button dc render-invisible?)
+  (if (button-name button)
+      (send dc set-pen "black" 1 'solid)
+      (send dc set-pen "black" 1 'long-dash))
+  (match (button-corners button)
+    [(list left top right bottom)
+     (when (or render-invisible? (button-name button))
+       (send dc draw-rectangle
+             (min left right) (min top bottom)
+             (- (max left right) (min left right))
+             (- (max top bottom) (min top bottom))))
+     (when (button-name button)
+       (send dc draw-text (button-name button) (+ 6 left) (+ 3 top)))]))
+
+(define (paint state dc canvas)
+  (send dc set-brush "white" 'transparent)
+  (send dc set-smoothing 'unsmoothed)
+  (for ([button (card-buttons (current-card state))])
+    (render-button button dc #t))
+  ;; if a button is currently being created
+  (let ([down (dict-ref (state-mouse state) 'down #f)]
+        [last (dict-ref (state-mouse state) 'last #f)])
+    (when (and down last (not (dict-ref (state-mouse state) 'target-button #f)))
+      (render-button (button (list (send down get-x) (send down get-y)
+                                   (send last get-x) (send last get-y))
+                             "" #f) dc #t))))
 
 (define buttons-mode
   (mode "buttons" "blue" '() click release move paint "draw"))

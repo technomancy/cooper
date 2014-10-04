@@ -12,7 +12,7 @@
 (define debug (box #f))
 
 (define (next-mode mode)
-  (hash-ref modes (mode-next mode)))
+  (dict-ref modes (mode-next mode)))
 
 (define (handle-key now canvas event)
   (when (send event get-control-down)
@@ -26,14 +26,12 @@
                (when filename
                  ;; TODO: fix to work with transparent structs
                  (update! now 'stack
-                          (lambda (_) (call-with-input-file filename read)))
+                          (lambda _ (call-with-input-file filename read)))
                  ;; TODO: not all stacks have a zero card?
-                 (update! now 'card (lambda (_) "zero"))))]
-      [(#\c) (update! now '(stack cards)
-                      hash-update (state-card (unbox now))
+                 (update! now 'card (lambda _ "zero"))))]
+      [(#\c) (update! now `(stack cards ,(state-card (unbox now)))
                       (λ (card) (card 'background '())))]
-      [(#\b) (update! now '(stack cards)
-                      hash-update (state-card (unbox now))
+      [(#\b) (update! now '(stack cards ,(state-card (unbox now)))
                       (λ (card) (card 'buttons '())))]
       [(#\0)
        (update! now 'card (lambda _ "zero"))
@@ -43,26 +41,26 @@
 (define (handle-mouse now canvas event)
   (case (send event get-event-type)
     [(left-down)
-     (update! now 'mouse hash-set 'down event)
-     (update! now 'mouse hash-set 'last event)
-     (update! now 'mouse hash-set 'at (current-milliseconds))
+     (update-in! now '(mouse) dict-set 'down event)
+     (update-in! now '(mouse) dict-set 'last event)
+     (update-in! now '(mouse) dict-set 'at (current-milliseconds))
      (let ([onclick (mode-onclick (state-mode (unbox now)))])
        (and onclick (swap! now onclick canvas event))
        (send canvas refresh))]
     [(left-up)
      (let ([mouse (state-mouse (unbox now))]
            [onrelease (mode-onrelease (state-mode (unbox now)))])
-       (update! now 'mouse (lambda (_) (hash)))
-       (update! now 'last-mouse (lambda (_) mouse))
+       (update! now 'mouse (λ _ (hash)))
+       (update! now 'last-mouse (λ _ mouse))
        (and onrelease (swap! now onrelease canvas event mouse))
        (send canvas refresh))]
     [(motion)
      (let ([onmove (mode-onmove (state-mode (unbox now)))])
        (and onmove (swap! now onmove canvas event))
-       (update! now 'mouse hash-set 'last event))]
+       (update-in! now '(mouse) dict-set 'last event))]
     [(right-down)
-     (update! now 'mode next-mode)
-     (update! now 'mouse (lambda (_) (hash)))
+     (update-in! now '(mode) next-mode)
+     (update-in! now '(mouse) (λ _ (hash)))
      (send canvas refresh)]))
 
 (define motion-drop-threshold 100)
@@ -126,11 +124,13 @@
         buttons))
 
 (define (zero-delete-card card state)
-  (zero-enter (state '(stack cards) hash-remove (card-name card))))
+  (zero-enter (dict-update-in state '(stack cards)
+                              dict-remove (card-name card))))
 
 (define (zero-copy-card card state)
   (let* ([new-card (card 'name string-append " copy")])
-    (zero-enter (state '(stack cards) hash-set (card-name new-card) new-card))))
+    (zero-enter (dict-update-in state '(stack cards)
+                                dict-set (card-name new-card) new-card))))
 
 (define (zero-place-delete-button card i buttons)
   (cons (button (list (+ 215 zero-button-x-offset)
@@ -150,25 +150,25 @@
 
 (define (zero-buttons stack card)
   (let* ([buttons (foldl zero-place-button '()
-                         (hash-values (stack-cards stack))
-                         (range (hash-count (stack-cards stack))))]
+                         (dict-values (stack-cards stack))
+                         (range (dict-count (stack-cards stack))))]
          [buttons (foldl zero-place-delete-button buttons
-                         (hash-values (stack-cards stack))
-                         (range (hash-count (stack-cards stack))))]
+                         (dict-values (stack-cards stack))
+                         (range (dict-count (stack-cards stack))))]
          [buttons (foldl zero-place-copy-button buttons
-                         (hash-values (stack-cards stack))
-                         (range (hash-count (stack-cards stack))))])
-    (card '(buttons) (lambda (_) (cons zero-new-card-button buttons)))))
+                         (dict-values (stack-cards stack))
+                         (range (dict-count (stack-cards stack))))])
+    (card 'buttons (cons zero-new-card-button buttons))))
 
 (define (zero-enter state)
-  (state '(stack cards) hash-update (state-card state)
+  (dict-update-in state `(stack cards ,(state-card state))
           (curry zero-buttons (state-stack state))))
 
 (define (zero-new-card state)
   (let ([card-name (get-text-from-user "card" "New card name:")])
     (if card-name
-        (zero-enter (state '(stack cards)
-                           hash-set card-name
+        (zero-enter (dict-update-in state '(stack cards)
+                           dict-set card-name
                            (card card-name '() '() (hash))))
         state)))
 
@@ -181,9 +181,9 @@
 
 ;;; loading
 
-(define (main)
+(module+ main
   (let* ([stack (stack "new" (hash "zero" card-zero "one" card-one) 800 600)]
-         [now (box (zero-enter (state "zero" stack (hash-ref modes "explore")
+         [now (box (zero-enter (state "zero" stack (dict-ref modes "explore")
                                       (hash) (hash))))]
          [frame (new frame% [label "Cooper"]
                      [width (stack-width stack)] [height (stack-height stack)])]
@@ -191,5 +191,3 @@
                       [paint-callback (curry paint now)])])
     (send frame show #t)
     now))
-
-;; TODO: module+ main once we switch to fstructs

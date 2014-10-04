@@ -5,12 +5,12 @@
 (provide explore-mode)
 
 (define (create-unknown-card state button)
-  (state '(stack cards) hash-set (button-action button)
-         (card (button-action button) '() '() (hash))))
+  (dict-update-in state '(stack cards) dict-set (button-action button)
+                  (card (button-action button) '() '() (hash))))
 
 (define (activate-button state action)
-  (let* ([leave (hash-ref (card-events (current-card state)) 'leave 'identity)]
-         [enter (hash-ref (card-events (current-card state)) 'enter 'identity)])
+  (let* ([leave (dict-ref (card-events (current-card state)) 'leave 'identity)]
+         [enter (dict-ref (card-events (current-card state)) 'enter 'identity)])
     ((apply compose (map eval (list enter action leave))) state)))
 
 (define (click state canvas event)
@@ -18,10 +18,10 @@
         (if (button-hit? event button)
             (let ([action (if (string? (button-action button))
                               (lambda (state)
-                                (state 'card (lambda (_) (button-action button))))
+                                (dict-set state 'card (button-action button)))
                               (button-action button))])
               (if (and (string? (button-action button))
-                       (not (hash-ref (stack-cards (state-stack state))
+                       (not (dict-ref (stack-cards (state-stack state))
                                       (button-action button) #f)))
                   (if (equal? (message-box "new card?"
                                            (format "Unknown card ~s; create it?"
