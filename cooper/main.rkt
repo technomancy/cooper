@@ -65,6 +65,7 @@
     [(right-down)
      (update-in! now '(mode) next-mode)
      (update-in! now '(mouse) (λ _ (hash)))
+     (send canvas set-cursor (dict-ref-in (unbox now) '(mode cursor)))
      (send canvas refresh)]))
 
 (define motion-drop-threshold 100)
@@ -94,15 +95,9 @@
               (string-append "Cooper: " (state-card (unbox now))))))
     (super-new)))
 
-(define (mode-border mode dc canvas)
-  (send dc set-pen (mode-color mode) 2 'solid)
-  (let-values ([(width height) (send canvas get-client-size)])
-    (send dc draw-rectangle 0 0 width height)))
-
 (define (paint now canvas dc)
   (send dc clear)
   (send dc set-brush "white" 'solid)
-  (mode-border (state-mode (unbox now)) dc canvas)
   (send dc set-pen "black" 1 'solid) ; default
   (send dc set-smoothing 'unsmoothed)
   (for [(step (card-background (current-card (unbox now))))]

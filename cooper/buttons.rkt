@@ -203,4 +203,5 @@
                              "" "" #f) dc #t))))
 
 (define buttons-mode
-  (mode "buttons" "blue" '() click release move paint "draw"))
+  (mode "buttons" "blue" '() click release move paint "draw"
+        (make-object cursor% 'cross)))

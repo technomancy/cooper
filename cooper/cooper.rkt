@@ -7,8 +7,8 @@
          (struct-out stack)
          (struct-out state)
          (struct-out mode)
-         current-card swap! update! update-in! dict-update-in flip
-         index-of replace
+         current-card swap! update! update-in! dict-update-in dict-ref-in
+         flip index-of replace
          button-hit?)
 
 
@@ -22,7 +22,7 @@
 
 (fstruct state (card stack mode mouse last-mouse))
 
-(fstruct mode (name color submodes onclick onrelease onmove paint next))
+(fstruct mode (name color submodes onclick onrelease onmove paint next cursor))
 
 (define (current-card state)
   (dict-ref (stack-cards (state-stack state)) (state-card state)))

@@ -8,9 +8,9 @@ A primitive [HyperCard](http://www.loper-os.org/?p=568) clone, sort of.
 
 Right-click to change modes.
 
-* explore (white border)
-* buttons (blue border)
-* drawing (red border)
+* explore (hand)
+* buttons (crosshair)
+* drawing (bullseye)
 
 Buttons are invisible unless you're in "buttons" mode. Double-click a
 button to give it a target card name for when it's clicked in explore mode.

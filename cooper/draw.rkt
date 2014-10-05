@@ -30,4 +30,5 @@
   state)
 
 (define draw-mode
-  (mode "draw" "red" '() #f release move paint "explore"))
+  (mode "draw" "red" '() #f release move paint "explore"
+        (make-object cursor% 'bullseye)))

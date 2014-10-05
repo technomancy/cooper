@@ -35,4 +35,5 @@
             #f)) state))
 
 (define explore-mode
-  (mode "explore" "white" '() click #f #f #f "buttons"))
+  (mode "explore" "white" '() click #f #f #f "buttons"
+        (make-object cursor% 'hand)))
