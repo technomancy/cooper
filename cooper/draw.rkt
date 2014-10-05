@@ -5,13 +5,15 @@
 (provide draw-mode)
 
 (define (release state canvas event mouse)
-  (let ([down (dict-ref mouse 'down)])
-    (dict-update-in state `(stack cards ,(state-card state) background)
-                    (flip cons) (list 'draw-line
-                                      (send down get-x)
-                                      (send down get-y)
-                                      (send event get-x)
-                                      (send event get-y)))))
+  (let ([down (dict-ref mouse 'down #f)])
+    (if down ; should never be false, need to investigate
+        (dict-update-in state `(stack cards ,(state-card state) background)
+                        (flip cons) (list 'draw-line
+                                          (send down get-x)
+                                          (send down get-y)
+                                          (send event get-x)
+                                          (send event get-y)))
+        state)))
 
 (define (paint state dc canvas)
   (send dc set-pen "black" 1 'solid)

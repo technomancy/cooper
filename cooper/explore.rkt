@@ -10,25 +10,27 @@
 
 (define (activate-button state action)
   (let* ([leave (dict-ref (card-events (current-card state)) 'leave 'identity)]
-         [enter (dict-ref (card-events (current-card state)) 'enter 'identity)])
-    ((apply compose (map eval (list enter action leave))) state)))
+         [enter (dict-ref (card-events (current-card state)) 'enter 'identity)]
+         [action-fn (λ (state) (state 'card action))])
+    ((apply compose (map eval (list enter action-fn leave))) state)))
+
+(define (run-code code state)
+  (with-handlers ([exn:fail? (lambda (exn)
+                               (message-box "Problem with code"
+                                            (exn-message exn)
+                                            false '(ok stop))
+                               false)])
+    (let ([code (eval (read (open-input-string code)))])
+      (if (procedure? code)
+          (code state)
+          (error "Button code is not a procedure:" code)))))
 
 (define (click state canvas event)
   (or (for/or [(button (card-buttons (current-card state)))]
         (if (button-hit? event button)
-            (let ([action (if (string? (button-action button))
-                              (lambda (state)
-                                (dict-set state 'card (button-action button)))
-                              (button-action button))])
-              (if (and (string? (button-action button))
-                       (not (dict-ref (stack-cards (state-stack state))
-                                      (button-action button) #f)))
-                  (if (equal? (message-box "new card?"
-                                           (format "Unknown card ~s; create it?"
-                                                   (button-action button))
-                                           #f '[ok-cancel]) 'ok)
-                      (activate-button (create-unknown-card state button) action)
-                      state)
+            (let ([action (button-action button)])
+              (if (eq? 'code action)
+                  (run-code (button-code button) state)
                   (activate-button state action)))
             #f)) state))
 

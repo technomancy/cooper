@@ -7,7 +7,8 @@
          (struct-out stack)
          (struct-out state)
          (struct-out mode)
-         current-card swap! update! update-in! dict-update-in flip replace
+         current-card swap! update! update-in! dict-update-in flip
+         index-of replace
          button-hit?)
 
 
@@ -15,7 +16,7 @@
 
 (fstruct card (name background buttons events))
 
-(fstruct button (corners action name))
+(fstruct button (corners action code name))
 
 (fstruct stack (name cards width height))
 
@@ -54,6 +55,9 @@
 
 (define (replace lst old new)
   (map (lambda (x) (if (equal? x old) new x)) lst))
+
+(define (index-of l x) ; how is this missing?
+  (for/or ([y l] [i (in-naturals)] #:when (equal? x y)) i))
 
 
 ;;; utilities
