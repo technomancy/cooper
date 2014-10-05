@@ -90,6 +90,7 @@
           code
           (error "needs to be a procedure")))))
 
+;; returns an updated button
 (define (button-edit state target-button)
   (let ([new-button (edit-window target-button (state-stack state))])
     (if new-button
@@ -201,5 +202,5 @@
                              "" "" #f) dc #t))))
 
 (define buttons-mode
-  (mode "buttons" "blue" '() click release move paint "draw"
+  (mode "buttons" click release move paint "draw"
         (make-object cursor% 'cross)))

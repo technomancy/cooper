@@ -7,6 +7,22 @@
          racket/match
          racket/serialize)
 
+;; A functional struct macro.
+
+;; This adds a few features over normal transparent structs including
+;; supporting dictionary methods and being applicable. Calling an
+;; fstruct with a single symbol argument reads from that field, while
+;; calling with a field and value will return a new instance with that
+;; field set to that value.
+
+;; (fstruct abc (a b c))
+;;
+;; ((abc 1 2 3) 'b) ; -> 2
+;; ((abc 1 2 3) 'c (curry + 5)) ; -> (abc 1 2 8)
+;; (dict-ref (abc 1 2 3) 'a) ; -> 1
+;; (dict-set (abc 1 2 3) 'b 4) ; -> (abc 1 4 3)
+;; (dict-update (abc 1 2 3) 'c (curry + 10)) ; -> (abc 1 2 13)
+
 (define-syntax (fstruct stx)
   (syntax-parse stx
     [(_ id:id (field:id ...))

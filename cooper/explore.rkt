@@ -4,14 +4,10 @@
 
 (provide explore-mode)
 
-(define (create-unknown-card state button)
-  (dict-update-in state '(stack cards) dict-set (button-action button)
-                  (card (button-action button) '() '() (hash))))
-
-(define (activate-button state action)
-  (let* ([leave (dict-ref (card-events (current-card state)) 'leave 'identity)]
-         [enter (dict-ref (card-events (current-card state)) 'enter 'identity)]
-         [action-fn (λ (state) (state 'card action))])
+(define (navigate-to state card-name)
+  (let ([leave (dict-ref (card-events (current-card state)) 'leave 'identity)]
+        [enter (dict-ref (card-events (current-card state)) 'enter 'identity)]
+        [action-fn (λ (state) (state 'card card-name))])
     ((apply compose (map eval (list enter action-fn leave))) state)))
 
 (define (run-code code state)
@@ -31,9 +27,9 @@
             (let ([action (button-action button)])
               (if (eq? 'code action)
                   (run-code (button-code button) state)
-                  (activate-button state action)))
+                  (navigate-to state action)))
             #f)) state))
 
 (define explore-mode
-  (mode "explore" "white" '() click #f #f #f "buttons"
+  (mode "explore" click #f #f #f "buttons"
         (make-object cursor% 'hand)))

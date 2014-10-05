@@ -18,6 +18,7 @@
 (define (handle-key now canvas event)
   (when (send event get-control-down)
     (case (send event get-key-code)
+      ;; save
       [(#\s) (let ([filename (put-file "Save to:")])
                (when filename
                  (when (file-exists? filename)
@@ -25,6 +26,7 @@
                  (call-with-output-file filename
                    (λ (port)
                      (write (serialize (state-stack (unbox now))) port)))))]
+      ;; load
       [(#\l) (let ([filename (get-file "Load:")])
                (when filename
                  (update! now 'stack
@@ -32,11 +34,15 @@
                                  (compose zero-enter deserialize read))))
                  ;; TODO: not all stacks have a zero card?
                  (update! now 'card (lambda _ "zero"))))]
+      ;; new card
       [(#\n) (swap! now zero-new-card)]
+      ;; clear background
       [(#\c) (update-in! now `(stack cards ,(state-card (unbox now)) background)
                       (λ _ '()))]
+      ;; clear buttons
       [(#\b) (update-in! now `(stack cards ,(state-card (unbox now)) buttons)
                       (λ _ '()))]
+      ;; navigate to card zero
       [(#\0)
        (update! now 'card (lambda _ "zero"))
        (swap! now zero-enter)])
@@ -62,7 +68,7 @@
      (let ([onmove (mode-onmove (state-mode (unbox now)))])
        (and onmove (swap! now onmove canvas event))
        (update-in! now '(mouse) dict-set 'last event))]
-    [(right-down)
+    [(right-down) ; TODO: change modes via right-click menu
      (update-in! now '(mode) next-mode)
      (update-in! now '(mouse) (λ _ (hash)))
      (send canvas set-cursor (dict-ref-in (unbox now) '(mode cursor)))
@@ -71,7 +77,8 @@
 (define motion-drop-threshold 100)
 (define last-motion (box 0))
 
-;; kind of a terrible hack
+;; without this we get spammed with mouse motion events much faster than we can
+;; deal with them. kind of a terrible hack.
 (define (drop-motion? event)
   (if (< (- (send event get-time-stamp)
             (unbox last-motion)) motion-drop-threshold)
@@ -85,7 +92,9 @@
       (printf "state: ~s~n" (unbox now)))
     (define/override (on-char event)
       (call-with-semaphore semaphore handle-key
-                           (lambda () #f) now this event))
+                           (lambda () #f) now this event)
+      (send (send this get-parent) set-label
+            (string-append "Cooper: " (state-card (unbox now)))))
     (define/override (on-event event)
       (when (or (not (equal? 'motion (send event get-event-type)))
                 (not (drop-motion? event)))
@@ -95,21 +104,23 @@
               (string-append "Cooper: " (state-card (unbox now))))))
     (super-new)))
 
+;; we re-draw from scratch every time! lots of room for optimization here.
 (define (paint now canvas dc)
-  (send dc clear)
-  (send dc set-brush "white" 'solid)
-  (send dc set-pen "black" 1 'solid) ; default
-  (send dc set-smoothing 'unsmoothed)
-  (for [(step (card-background (current-card (unbox now))))]
-    (apply dynamic-send dc step))
-  (for [(button (card-buttons (current-card (unbox now))))]
-    (render-button button dc #f))
-  (let ([painter (mode-paint (state-mode (unbox now)))])
-    (when painter
-      (painter (unbox now) dc canvas))))
+  (let ([state (unbox now)])
+    (send dc clear)
+    (send dc set-brush "white" 'solid)
+    (send dc set-pen "black" 1 'solid) ; default
+    (send dc set-smoothing 'unsmoothed)
+    (for [(step (card-background (current-card state)))]
+      (apply dynamic-send dc step))
+    (for [(button (card-buttons (current-card state)))]
+      (render-button button dc #f))
+    (let ([painter (mode-paint (state-mode state))])
+      (when painter
+        (painter (unbox now) dc canvas)))))
 
 
-;;; card zero
+;;; card zero is the index; contains buttons to all the other cards
 
 (define zero-button-x-offset 25)
 
@@ -117,7 +128,6 @@
 
 (define (zero-place-button card i buttons)
   (cons (button (list zero-button-x-offset (* zero-button-y-offset (add1 i))
-                      ;; TODO: 200 is nonsense here
                       200 (- (* zero-button-y-offset (+ 2 i)) 5))
                 (card-name card) "" (card-name card))
         buttons))
@@ -159,6 +169,7 @@
                          (range (dict-count (stack-cards stack))))])
     (card 'buttons (cons zero-new-card-button buttons))))
 
+;; this function refreshes card zero's button list
 (define (zero-enter state)
   (dict-update-in state `(stack cards "zero")
           (curry zero-buttons (state-stack state))))
@@ -184,6 +195,9 @@
   (let* ([stack (stack "new" (hash "zero" card-zero "one" card-one) 800 600)]
          [now (box (zero-enter (state "zero" stack (dict-ref modes "explore")
                                       (hash) (hash))))]
+         [now (if (unbox debug)
+                  (contract now/c now 'valid-state 'invalid-state)
+                  now)]
          [frame (new frame% [label "Cooper"]
                      [width (stack-width stack)] [height (stack-height stack)])]
          [canvas (new (card-canvas% now (make-semaphore 1)) [parent frame]

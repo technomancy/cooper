@@ -16,10 +16,10 @@
         state)))
 
 (define (paint state dc canvas)
-  (send dc set-pen "black" 1 'solid)
   (let ([down (dict-ref (state-mouse state) 'down #f)]
         [last (dict-ref (state-mouse state) 'last #f)])
     (when (and down last)
+      (send dc set-pen "black" 1 'solid)
       (send dc draw-line
             (send down get-x) (send down get-y)
             (send last get-x) (send last get-y)))))
@@ -30,5 +30,5 @@
   state)
 
 (define draw-mode
-  (mode "draw" "red" '() #f release move paint "explore"
+  (mode "draw" #f release move paint "explore"
         (make-object cursor% 'bullseye)))
