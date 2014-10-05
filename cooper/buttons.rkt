@@ -19,14 +19,9 @@
   (send frame on-close)
   (send frame show #f))
 
+;; TODO: editor only enabled when code is selected
 (define (choices-callback editor action choice _event)
-  (set-box! action (send choice get-string-selection))
-  ;; TODO: editor only enabled when code is selected
-  ;; (match (send choice get-string-selection)
-  ;;   ["<code>" (enable-editor editor)]
-  ;;   ["<new>" (make-new-card)]
-  ;;   [card-name (set-box! action card-name)])
-  )
+  (set-box! action (send choice get-string-selection)))
 
 (define (blocker sem)
   (when (not (semaphore-try-wait? sem))
@@ -45,18 +40,16 @@
          [canvas (new (class editor-canvas%
                         (define/override (on-char event)
                           (cond [(equal? 'escape (send event get-key-code))
-                                 (button-callback frame success? false '() '())]
+                                 (button-callback frame success? #f '() '())]
                                 [(and (equal? #\return (send event get-key-code))
                                       (send event get-control-down))
-                                 (button-callback frame success? true '() '())]
+                                 (button-callback frame success? #t '() '())]
                                 [else (super on-char event)]))
                         (super-new))
                       [parent vpane])]
          [hpane (new horizontal-pane% [parent frame]
                      [stretchable-height false])]
-         [possible-actions (append '("<code>" ; "<new>"
-                                     ) ; TODO: support creating new card here
-                                   (dict-keys (stack-cards stack)))]
+         [possible-actions (cons "<code>" (dict-keys (stack-cards stack)))]
          [choices (new choice% [parent hpane] [label "Action:"]
                        [choices possible-actions]
                        [selection (or (index-of possible-actions (unbox action)) 0)]
@@ -65,7 +58,8 @@
                       [callback (curry button-callback frame success? #f)])]
          [ok (new button% [label "OK"] [parent hpane]
                   [callback (curry button-callback frame success? #t)])]
-         ;; TODO: delete button
+         [delete (new button% [label "Delete"] [parent hpane]
+                      [callback (curry button-callback frame success? 'delete)])]
          [mb (new menu-bar% [parent frame])]
          [m-edit (new menu% [label "Edit"] [parent mb])]
          [style (make-object style-delta% 'change-family 'modern)])
@@ -76,13 +70,14 @@
     (send frame show #t)
     (send editor insert snip)
     (blocker sem) ; probably a better way to do this
-    (if (unbox success?)
-        (let* ([action (if (equal? "<code>" (unbox action))
-                           'code
-                           (unbox action))]
-               [new-button (button 'action action)])
-          (new-button 'code (send editor get-flattened-text)))
-        button)))
+    (match (unbox success?)
+      [#f button]
+      ['delete #f]
+      [_ (let* ([action (if (equal? "<code>" (unbox action))
+                            'code
+                            (unbox action))]
+                [new-button (button 'action action)])
+           (new-button 'code (send editor get-flattened-text)))])))
 
 (define (try-code-action input)
   (with-handlers ([exn:fail? (lambda (exn)
@@ -97,8 +92,11 @@
 
 (define (button-edit state target-button)
   (let ([new-button (edit-window target-button (state-stack state))])
-    (dict-update-in state `(stack cards ,(state-card state) buttons)
-                    replace target-button new-button)))
+    (if new-button
+        (dict-update-in state `(stack cards ,(state-card state) buttons)
+                        replace target-button new-button)
+        (dict-update-in state `(stack cards ,(state-card state) buttons)
+                        (curry remove target-button)))))
 
 
 ;;; click handlers
