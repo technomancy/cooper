@@ -160,15 +160,15 @@
     (card 'buttons (cons zero-new-card-button buttons))))
 
 (define (zero-enter state)
-  (dict-update-in state `(stack cards ,(state-card state))
+  (dict-update-in state `(stack cards "zero")
           (curry zero-buttons (state-stack state))))
 
 (define (zero-new-card state)
   (let ([card-name (get-text-from-user "card" "New card name:")])
     (if card-name
         (zero-enter (dict-update-in state '(stack cards)
-                           dict-set card-name
-                           (card card-name '() '() (hash))))
+                                    dict-set card-name
+                                    (card card-name '() '() (hash))))
         state)))
 
 (define zero-new-card-button (button '(0 0 25 30) 'code "zero-new-card" "+"))
@@ -189,4 +189,5 @@
          [canvas (new (card-canvas% now (make-semaphore 1)) [parent frame]
                       [paint-callback (curry paint now)])])
     (send frame show #t)
+    (send canvas set-cursor (mode-cursor explore-mode))
     now))

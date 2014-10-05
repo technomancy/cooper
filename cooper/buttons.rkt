@@ -131,7 +131,7 @@
       (let ([corners (make-button-corners (dict-ref mouse 'down)
                                           (dict-ref mouse 'last))])
         (dict-update-in state `(stack cards ,(state-card state) buttons)
-                        (flip cons) (button corners "" "" #f)))
+                        (flip cons) (button corners "<code>" "" #f)))
       state))
 
 (define resize-threshold 10)
