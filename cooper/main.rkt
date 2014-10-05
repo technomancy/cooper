@@ -29,7 +29,7 @@
                (when filename
                  (update! now 'stack
                           (λ _ (call-with-input-file filename
-                                 (compose deserialize read))))
+                                 (compose zero-enter deserialize read))))
                  ;; TODO: not all stacks have a zero card?
                  (update! now 'card (lambda _ "zero"))))]
       [(#\c) (update-in! now `(stack cards ,(state-card (unbox now)) background)
