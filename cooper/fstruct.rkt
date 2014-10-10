@@ -18,7 +18,7 @@
 ;; (fstruct abc (a b c))
 ;;
 ;; ((abc 1 2 3) 'b) ; -> 2
-;; ((abc 1 2 3) 'c (curry + 5)) ; -> (abc 1 2 8)
+;; ((abc 1 2 3) 'c 8) ; -> (abc 1 2 8)
 ;; (dict-ref (abc 1 2 3) 'a) ; -> 1
 ;; (dict-set (abc 1 2 3) 'b 4) ; -> (abc 1 4 3)
 ;; (dict-update (abc 1 2 3) 'c (curry + 10)) ; -> (abc 1 2 13)

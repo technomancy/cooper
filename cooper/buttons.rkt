@@ -33,6 +33,7 @@
          [success? (box #f)]
          [action (box (button-action button))]
          [editor (new text%)]
+         ;; TODO: this swallows newlines somehow
          [snip (make-object string-snip% (button-code button))]
          [frame (new (editor-frame% sem) [label "Button Edit"]
                      [width 500] [height 500])]

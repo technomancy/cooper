@@ -132,12 +132,12 @@
                 (card-name card) "" (card-name card))
         buttons))
 
-(define (zero-delete-card card state)
-  (zero-enter (dict-update-in state '(stack cards)
-                              dict-remove (card-name card))))
+(define (zero-delete-card name state)
+  (zero-enter (dict-update-in state '(stack cards) dict-remove name)))
 
-(define (zero-copy-card card state)
-  (let* ([new-card (card 'name string-append " copy")])
+(define (zero-copy-card name state)
+  (let* ([old-card (dict-ref-in state `(stack cards ,name))]
+         [new-card (dict-update-in old-card '(name) string-append " copy")])
     (zero-enter (dict-update-in state '(stack cards)
                                 dict-set (card-name new-card) new-card))))
 
@@ -146,7 +146,8 @@
                       (* zero-button-y-offset (add1 i))
                       (+ 240 zero-button-x-offset)
                       (- (* zero-button-y-offset (+ 2 i)) 5))
-                'code (~s "(lambda (state) (zero-delete-card ~s state))" card) "x")
+                'code (format "(λ (state) (zero-delete-card ~s state))"
+                              (card 'name)) "x")
         buttons))
 
 (define (zero-place-copy-button card i buttons)
@@ -154,7 +155,8 @@
                       (* zero-button-y-offset (add1 i))
                       (+ 285 zero-button-x-offset)
                       (- (* zero-button-y-offset (+ 2 i)) 5))
-                'code (~s "(lambda (state) (zero-copy-card ~s state))" card) "x")
+                'code (format "(lambda (state) (zero-copy-card ~s state))"
+                              (card 'name)) "+")
         buttons))
 
 (define (zero-buttons stack card)
